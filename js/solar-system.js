@@ -167,9 +167,20 @@
                 // 地球特殊处理：根据当前时间设置初始自转角度
                 var initialRotation = 0;
                 if(d.name === 'Earth'){
-                    // 地球自转角度：0点时，某个经线正对太阳方向
-                    // 当前时间的小时分数 * 2π = 自转角度
-                    initialRotation = initialHourFraction * 2 * Math.PI;
+                    // 地球自转需要考虑：
+                    // 1. 当前 UTC 时间（北京时间 - 8 小时）
+                    // 2. 地球在轨道上的位置（确定哪个方向正对太阳）
+                    // UTC 时间：北京时间 21:43 = UTC 13:43
+                    var utcHour = (simDate.getHours() - 8 + 24) % 24 + simDate.getMinutes()/60 + simDate.getSeconds()/3600;
+                    // UTC 12:00 时本初子午线正对太阳
+                    // 地球-Z轴（Three.js默认前方）需要正对太阳
+                    // 自转角度 = UTC时间对应的旋转
+                    // 太阳在轨道中心，地球在(x0, 0, z0)位置
+                    // 地球朝向太阳的方向向量
+                    var toSun = Math.atan2(-x0, -z0); // 地球看向太阳的角度
+                    // UTC 时间决定哪个经线正对太阳：UTC 12:00 = 0度经线正对太阳
+                    // 所以自转角度 = toSun + (12 - utcHour) * 15度
+                    initialRotation = toSun + (12 - utcHour) * Math.PI / 12;
                 }
                 
                 // 纹理
@@ -473,6 +484,7 @@
         
         // 更新模拟天数
         simDays += dt_days;
+        simSeconds += dt_seconds;
         
         // 每100帧更新一次日期显示
         if(Math.floor(simDays * 10) % 10 === 0) {
