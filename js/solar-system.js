@@ -164,23 +164,23 @@
                 // 简化：用平均近点角作为真近点角（忽略偏心率带来的差异）
                 var angle = meanAnomaly;
                 
+                // 计算初始位置
+                var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
+                var x0 = r0 * Math.cos(angle);
+                var z0 = r0 * Math.sin(angle);
+                
                 // 地球特殊处理：根据当前时间设置初始自转角度
                 var initialRotation = 0;
                 if(d.name === 'Earth'){
                     // 地球自转需要考虑：
-                    // 1. 当前 UTC 时间（北京时间 - 8 小时）
+                    // 1. 当前 UTC 时间
                     // 2. 地球在轨道上的位置（确定哪个方向正对太阳）
-                    // UTC 时间：北京时间 21:43 = UTC 13:43
-                    var utcHour = (simDate.getHours() - 8 + 24) % 24 + simDate.getMinutes()/60 + simDate.getSeconds()/3600;
+                    var utcHour = simDate.getUTCHours() + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600;
+                    // 地球朝向太阳的角度
+                    var toSun = Math.atan2(-x0, -z0);
                     // UTC 12:00 时本初子午线正对太阳
-                    // 地球-Z轴（Three.js默认前方）需要正对太阳
-                    // 自转角度 = UTC时间对应的旋转
-                    // 太阳在轨道中心，地球在(x0, 0, z0)位置
-                    // 地球朝向太阳的方向向量
-                    var toSun = Math.atan2(-x0, -z0); // 地球看向太阳的角度
-                    // UTC 时间决定哪个经线正对太阳：UTC 12:00 = 0度经线正对太阳
-                    // 所以自转角度 = toSun + (12 - utcHour) * 15度
-                    initialRotation = toSun + (12 - utcHour) * Math.PI / 12;
+                    // 调整自转角度让当前时间的经线处于正确位置
+                    initialRotation = toSun + Math.PI - (utcHour - 12) * Math.PI / 12;
                 }
                 
                 // 纹理
@@ -225,10 +225,7 @@
                 southPole.position.y = -axisLength;
                 axisMesh.add(southPole);
                 
-                // 初始位置
-                var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
-                var x0 = r0 * Math.cos(angle);
-                var z0 = r0 * Math.sin(angle);
+                // 设置位置
                 pivot.position.set(x0, z0 * Math.sin(inclination), z0 * Math.cos(inclination));
                 
                 mesh.userData = d;
