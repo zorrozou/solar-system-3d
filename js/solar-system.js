@@ -2,7 +2,7 @@
     var scene, camera, renderer, controls;
     var planets = [];
     var sunMesh = null;
-    var speedMultiplier = 500.0;
+    var speedMultiplier = 300000.0;
     var moon = null;
     var paused = false;
     var sunPulse = 0;
@@ -180,8 +180,8 @@
                 // 自转轴指示器（放在容器下，不跟着球体自转）
                 // 自转轴 = 行星围绕旋转的轴，穿过南北极
                 var axisLength = radius * 2.5;
-                var axisGeometry = new THREE.CylinderGeometry(0.04, 0.04, axisLength * 2, 8);
-                var axisMaterial = new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.8});
+                var axisGeometry = new THREE.CylinderGeometry(0.015, 0.015, axisLength * 2, 8);
+                var axisMaterial = new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.6});
                 var axisMesh = new THREE.Mesh(axisGeometry, axisMaterial);
                 // 圆柱默认沿Y轴，在pivot坐标系下Y轴就是自转轴方向
                 pivot.add(axisMesh);
@@ -253,10 +253,10 @@
                 label.addEventListener('mouseleave', function(){ this.style.background='none'; this.style.color='rgba(255,255,255,0.7)'; });
                 document.getElementById('canvas-container').appendChild(label);
                 
-                (function(m, r){
-                    label.addEventListener('click', function(e){ e.stopPropagation(); startTrack(m, r); });
-                    label.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); startTrack(m, r); });
-                })(pivot, radius);
+                (function(pivot, mesh, r){
+                    label.addEventListener('click', function(e){ e.stopPropagation(); startTrack(pivot, mesh, r); });
+                    label.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); startTrack(pivot, mesh, r); });
+                })(pivot, mesh, radius);
                 
                 planets.push({
                     pivot: pivot,
@@ -302,13 +302,13 @@
         });
 
         // 视角控制
-        function startTrack(targetMesh, radius) {
-            var pos = targetMesh.position.clone();
+        function startTrack(targetPivot, targetMesh, radius) {
+            var pos = targetPivot.position.clone();
             var r = radius || 1;
             var viewDist = r * 5;
             var targetCamPos = new THREE.Vector3(pos.x + viewDist, pos.y + viewDist*0.4, pos.z + viewDist);
             
-            trackTarget = targetMesh;
+            trackTarget = targetPivot;
             trackOffset = targetCamPos.clone().sub(pos);
             
             isFlying = true;
