@@ -186,21 +186,21 @@
                 // 地球特殊处理：根据当前时间设置初始自转角度
                 var initialRotation = 0;
                 if(d.name === 'Earth'){
-                    // 地球自转：让当前时间对应的经线处于正确位置
-                    // 北京时间 22:18 = UTC 14:18
-                    // UTC 12:00 时本初子午线正对太阳
-                    // 所以 UTC 14:18 时，本初子午线已经转过了 2.3小时 * 15度/小时
+                    // 北京时间 22:45 = UTC 14:45
+                    // 中国在东经120度，晚上应该背对太阳
                     var utcHour = simDate.getUTCHours() + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600;
+                    var beijingHour = (utcHour + 8) % 24; // 北京时间
+                    
                     // 地球朝向太阳的角度
                     var toSun = Math.atan2(-x0, -z0);
-                    // 自转角度：让当前时间的经线处于正确位置
-                    // 北京时间 22:29 = UTC 14:29 = 中国晚上 = 中国背对太阳
-                    // 中国在东经120度，UTC 14:29 时应该在背对太阳的位置
-                    // 地球自转 = 让正确的时间对应正确的光照
-                    // 偏移量需要让中国在晚上背对太阳
-                    var chinaLonOffset = 120 * Math.PI / 180; // 中国东经120度
-                    initialRotation = toSun + Math.PI/2 - (utcHour - 12) * Math.PI / 12 - chinaLonOffset;
-                    console.log('Earth rotation - UTC:', utcHour.toFixed(2), 'toSun:', (toSun*180/Math.PI).toFixed(1), 'initialRotation:', (initialRotation*180/Math.PI).toFixed(1));
+                    
+                    // 北京时间24点（午夜）= 中国背对太阳
+                    // 北京时间12点（正午）= 中国正对太阳
+                    // 自转角度 = 让中国在正确的时间处于正确的光照
+                    // 北京时间每过1小时，地球需要转15度
+                    initialRotation = toSun - (beijingHour) * Math.PI / 12;
+                    
+                    console.log('Earth rotation - Beijing:', beijingHour.toFixed(2), 'toSun:', (toSun*180/Math.PI).toFixed(1), 'initialRotation:', (initialRotation*180/Math.PI).toFixed(1));
                 }
                 
                 // 纹理
