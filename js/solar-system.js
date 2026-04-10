@@ -187,17 +187,20 @@
                 // 地球特殊处理：根据当前时间设置初始自转角度
                 var initialRotation = 0;
                 if(d.name === 'Earth'){
-                    // 地球自转需要考虑：
-                    // 1. 当前 UTC 时间
-                    // 2. 地球在轨道上的位置（确定哪个方向正对太阳）
+                    // 地球自转：让当前时间对应的经线处于正确位置
+                    // 北京时间 22:18 = UTC 14:18
+                    // UTC 12:00 时本初子午线正对太阳
+                    // 所以 UTC 14:18 时，本初子午线已经转过了 2.3小时 * 15度/小时
                     var utcHour = simDate.getUTCHours() + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600;
                     // 地球朝向太阳的角度
                     var toSun = Math.atan2(-x0, -z0);
-                    // UTC 0:00 时本初子午线背对太阳（午夜）
-                    // UTC 12:00 时本初子午线正对太阳（正午）
-                    // 调整自转角度让当前时间的经线处于正确位置
-                    // 注意：纹理映射可能需要调整方向
-                    initialRotation = toSun - (utcHour) * Math.PI / 12;
+                    // 自转角度：让当前时间的经线处于正确位置
+                    // 北京时间 22:18 = UTC 14:18 = 中国晚上 = 中国背对太阳
+                    // UTC 12:00 时本初子午线正对太阳
+                    // UTC 14:18 时本初子午线已经偏离太阳 35度
+                    // 注意：需要让中国（东经120度）背对太阳
+                    initialRotation = toSun + Math.PI - (utcHour - 12) * Math.PI / 12;
+                    console.log('Earth rotation - UTC:', utcHour.toFixed(2), 'toSun:', (toSun*180/Math.PI).toFixed(1), 'initialRotation:', (initialRotation*180/Math.PI).toFixed(1));
                 }
                 
                 // 纹理
