@@ -195,9 +195,12 @@
                     // 地球朝向太阳的角度
                     var toSun = Math.atan2(-x0, -z0);
                     // 自转角度：让当前时间的经线处于正确位置
-                    // 北京时间 22:28 = UTC 14:28 = 中国晚上 = 中国背对太阳
-                    // 反转并偏移180度
-                    initialRotation = -(toSun - (utcHour - 12) * Math.PI / 12);
+                    // 北京时间 22:29 = UTC 14:29 = 中国晚上 = 中国背对太阳
+                    // 中国在东经120度，UTC 14:29 时应该在背对太阳的位置
+                    // 地球自转 = 让正确的时间对应正确的光照
+                    // 偏移量需要让中国在晚上背对太阳
+                    var chinaLonOffset = 120 * Math.PI / 180; // 中国东经120度
+                    initialRotation = toSun + Math.PI/2 - (utcHour - 12) * Math.PI / 12 - chinaLonOffset;
                     console.log('Earth rotation - UTC:', utcHour.toFixed(2), 'toSun:', (toSun*180/Math.PI).toFixed(1), 'initialRotation:', (initialRotation*180/Math.PI).toFixed(1));
                 }
                 
