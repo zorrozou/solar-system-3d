@@ -323,7 +323,7 @@
         // ========== 视角更新 ==========
         // 1. 飞行动画
         if(isFlying && flyStart && flyEnd){
-            flyProgress += 0.05;
+            flyProgress += 0.02; // 调慢飞行速度
             if(flyProgress >= 1){
                 flyProgress = 1;
                 isFlying = false;
