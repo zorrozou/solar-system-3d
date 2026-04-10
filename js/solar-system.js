@@ -184,21 +184,29 @@
                 
                 scene.add(mesh);
                 
-                // 自转轴指示器
-                var axisLength = radius * 1.8;
-                var axisGeometry = new THREE.CylinderGeometry(0.02, 0.02, axisLength * 2, 8);
-                var axisMaterial = new THREE.MeshBasicMaterial({color: 0x66aaff, transparent: true, opacity: 0.6});
+                // 自转轴指示器（沿行星Y轴方向，即自转轴）
+                var axisLength = radius * 2;
+                var axisGeometry = new THREE.CylinderGeometry(0.03, 0.03, axisLength * 2, 8);
+                var axisMaterial = new THREE.MeshBasicMaterial({color: 0x44aaff, transparent: true, opacity: 0.7});
                 var axisMesh = new THREE.Mesh(axisGeometry, axisMaterial);
-                axisMesh.rotation.x = Math.PI / 2; // 让圆柱垂直
+                // 圆柱默认沿Y轴，正好是自转轴方向，不需要旋转
                 mesh.add(axisMesh);
                 
-                // 自转轴顶部小球
-                var axisTop = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.08, 8, 8),
-                    new THREE.MeshBasicMaterial({color: 0x88ccff})
+                // 北极标记（顶部小球）
+                var northPole = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.1, 8, 8),
+                    new THREE.MeshBasicMaterial({color: 0x66ccff})
                 );
-                axisTop.position.y = axisLength;
-                axisMesh.add(axisTop);
+                northPole.position.y = axisLength; // Y轴正方向是北
+                axisMesh.add(northPole);
+                
+                // 南极标记（底部小球，稍小）
+                var southPole = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.08, 8, 8),
+                    new THREE.MeshBasicMaterial({color: 0x4488cc})
+                );
+                southPole.position.y = -axisLength;
+                axisMesh.add(southPole);
                 
                 // 椭圆轨道线
                 var oPts = [];
@@ -377,7 +385,10 @@
 
     function animate() {
         requestAnimationFrame(animate);
-        var dt = paused ? 0 : speedMultiplier * 0.01;
+        
+        // dt = 模拟的天数，10倍速意味着每秒模拟10天
+        // 60fps下，每帧 dt = speedMultiplier / 60 天
+        var dt = paused ? 0 : speedMultiplier / 60;
         
         // 更新模拟天数（dt 是模拟的天数增量）
         simDays += dt;
