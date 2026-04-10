@@ -2,33 +2,64 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>3D 太阳系 - Zorro's Space</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪐</text></svg>">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, 'Noto Sans SC', sans-serif; overflow: hidden; background: #000; color: #fff; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body { font-family: -apple-system, 'Noto Sans SC', sans-serif; background: #000; color: #fff; touch-action: none; }
         #canvas-container { width: 100vw; height: 100vh; cursor: grab; }
         #canvas-container:active { cursor: grabbing; }
-        .toolbar { position: fixed; top: 16px; left: 16px; z-index: 20; display: flex; gap: 8px; }
-        .toolbar-btn { padding: 8px 16px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; cursor: pointer; }
+        
+        .toolbar { position: fixed; top: 12px; left: 12px; z-index: 20; }
+        .toolbar-btn { padding: 8px 14px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 18px; color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; cursor: pointer; }
         .toolbar-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
-        #controls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.8); padding: 12px 28px; border-radius: 28px; display: flex; align-items: center; gap: 14px; z-index: 10; }
-        #controls label { font-size: 13px; color: rgba(255,255,255,0.6); }
-        #speed-control { width: 180px; height: 4px; -webkit-appearance: none; background: rgba(255,255,255,0.15); outline: none; }
-        #speed-control::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #60a5fa; cursor: pointer; }
-        #speed-value { width: 50px; text-align: center; font-weight: 600; color: #60a5fa; font-size: 14px; }
-        #info-panel { position: fixed; top: 16px; right: 16px; background: rgba(8,10,20,0.88); padding: 24px; border-radius: 16px; width: 300px; max-height: calc(100vh - 100px); overflow-y: auto; display: none; z-index: 10; }
-        #planet-name { font-size: 20px; font-weight: 600; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; }
-        .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13px; }
+        
+        #controls { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.85); padding: 10px 20px; border-radius: 24px; display: flex; align-items: center; gap: 12px; z-index: 10; flex-wrap: wrap; justify-content: center; }
+        #controls label { font-size: 12px; color: rgba(255,255,255,0.6); }
+        #speed-control { width: 120px; height: 4px; -webkit-appearance: none; background: rgba(255,255,255,0.15); outline: none; border-radius: 2px; }
+        #speed-control::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #60a5fa; cursor: pointer; }
+        #speed-value { min-width: 40px; text-align: center; font-weight: 600; color: #60a5fa; font-size: 13px; }
+        #pause-btn { padding: 6px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        
+        #info-panel { position: fixed; top: 12px; right: 12px; background: rgba(8,10,20,0.92); padding: 18px; border-radius: 14px; width: 280px; max-width: calc(100vw - 24px); max-height: calc(100vh - 80px); overflow-y: auto; display: none; z-index: 10; }
+        #planet-name { font-size: 18px; font-weight: 600; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
+        .stat { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 12px; }
         .stat-label { color: rgba(255,255,255,0.5); }
         .stat-value { color: #fff; font-weight: 500; }
-        .planet-desc { margin-top: 12px; color: rgba(255,255,255,0.6); line-height: 1.6; font-size: 13px; }
-        .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 18px; color: rgba(255,255,255,0.5); z-index: 100; }
+        .planet-desc { margin-top: 10px; color: rgba(255,255,255,0.6); line-height: 1.5; font-size: 12px; }
+        
+        .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 16px; color: rgba(255,255,255,0.5); z-index: 100; }
         .loading.error { color: #ff6b6b; }
-        .hint { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 12px; z-index: 10; pointer-events: none; }
-        #time-display { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.7); border-radius: 20px; padding: 8px 20px; font-size: 13px; color: rgba(255,255,255,0.6); z-index: 20; }
+        
+        .hint { position: fixed; bottom: 65px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 11px; z-index: 10; pointer-events: none; text-align: center; white-space: nowrap; }
+        
+        #time-display { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.7); border-radius: 16px; padding: 6px 14px; font-size: 12px; color: rgba(255,255,255,0.6); z-index: 20; }
         #sim-date { color: #60a5fa; font-weight: 600; }
+        
+        .planet-label { pointer-events: auto; }
+        
+        .key-hints { position: fixed; bottom: 8px; left: 8px; color: rgba(255,255,255,0.3); font-size: 10px; z-index: 5; line-height: 1.5; }
+        
+        /* 移动端适配 */
+        @media (max-width: 600px) {
+            #speed-control { width: 100px; }
+            #info-panel { width: calc(100vw - 20px); left: 10px; right: 10px; top: auto; bottom: 80px; padding: 14px; max-height: 40vh; }
+            .toolbar { top: 8px; left: 8px; }
+            .toolbar-btn { padding: 6px 12px; font-size: 12px; }
+            #time-display { top: 8px; font-size: 11px; padding: 5px 12px; }
+            #controls { bottom: 12px; padding: 8px 14px; gap: 8px; }
+            .hint { bottom: 55px; font-size: 10px; }
+            .key-hints { display: none; }
+        }
+        
+        @media (max-width: 400px) {
+            #controls { flex-direction: column; gap: 6px; padding: 8px 12px; }
+            #speed-control { width: 140px; }
+        }
     </style>
 </head>
 <body>
@@ -47,20 +78,21 @@
         <div id="planet-info"></div>
     </div>
 
-    <div class="hint">点击行星查看详情 · 拖动旋转 · 滚轮缩放</div>
+    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放</div>
 
     <div id="controls">
         <label>速度</label>
         <input type="range" id="speed-control" min="0" max="2000" value="10">
         <span id="speed-value">10x</span>
-        <button id="pause-btn" style="margin-left:10px;padding:4px 12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);color:white;border-radius:4px;cursor:pointer;">⏸ 暂停</button>
+        <button id="pause-btn">⏸ 暂停</button>
+    </div>
+
+    <div class="key-hints">
+        空格:暂停 | ↑↓:加速减速 | R:重置 | ESC:退出跟踪
     </div>
 
     <script src="lib/three.min.js"></script>
     <script src="lib/OrbitControls.js"></script>
-    <script src="js/solar-system.js?v=clickfix3"></script>
-<div style="position:fixed;bottom:10px;left:10px;color:rgba(255,255,255,0.3);font-size:11px;">
-    空格:暂停/播放 | ↑↓:加速减速 | R:重置视角 | M:测量距离
-</div>
+    <script src="js/solar-system.js?v=ellipse"></script>
 </body>
 </html>
