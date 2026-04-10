@@ -11,9 +11,9 @@
     var trackTarget = null;      // null=自由模式, mesh=跟踪模式
     var trackOffset = null;      // 相机相对于目标的偏移
     var isFlying = false;        // 是否正在飞行
+    var isDragging = false;      // 是否正在拖动
     var flyStart = null;         // 飞行起始位置
     var flyEnd = null;           // 飞行目标位置
-    var flyTargetPos = null;     // 飞行目标target
     var flyProgress = 0;
 
     function init() {
@@ -37,17 +37,15 @@
         controls.minDistance = 5;
         controls.maxDistance = 800;
         
-        // 拖动时：中断飞行，更新跟踪偏移
-        controls.addEventListener('change', function() {
-            if(isFlying) {
-                // 用户拖动时中断飞行
-                isFlying = false;
-                flyProgress = 0;
-            }
+        // 拖动状态
+        controls.addEventListener('start', function() {
+            isDragging = true;
+            isFlying = false; // 拖动时中断飞行
         });
         
-        // 拖动结束后：更新跟踪偏移
         controls.addEventListener('end', function() {
+            isDragging = false;
+            // 拖动结束后更新跟踪偏移
             if(trackTarget) {
                 trackOffset = camera.position.clone().sub(trackTarget.position);
             }
@@ -341,8 +339,8 @@
             }
         }
         
-        // 2. 跟踪模式（非飞行时）
-        if(trackTarget && trackOffset && !isFlying){
+        // 2. 跟踪模式（非飞行、非拖动时）
+        if(trackTarget && trackOffset && !isFlying && !isDragging){
             var targetPos = trackTarget.position.clone();
             camera.position.copy(targetPos.clone().add(trackOffset));
             controls.target.copy(targetPos);
