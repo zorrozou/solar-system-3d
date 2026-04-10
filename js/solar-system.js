@@ -168,10 +168,6 @@
                     mesh.add(uRing);
                 }
                 
-                // 点击热区
-                var hitMesh=new THREE.Mesh(new THREE.SphereGeometry(Math.max(radius*3,2),8,8), new THREE.MeshBasicMaterial({visible:false}));
-                mesh.add(hitMesh);
-                
                 // 标签
                 var label=document.createElement('div');
                 label.textContent=d.name_cn||d.name;
