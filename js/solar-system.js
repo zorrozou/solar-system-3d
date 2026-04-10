@@ -7,6 +7,7 @@
     var paused = false;
     var flyTarget = null;
     var trackTarget = null;  // 跟踪目标
+    var flyProgress = 0; // 飞行进度
     var sunPulse = 0;
 
     function init() {
@@ -29,11 +30,6 @@
         controls.rotateSpeed = 0.8;
         controls.minDistance = 5;
         controls.maxDistance = 800;
-        
-        // 用户开始拖动时中断飞行
-        controls.addEventListener('start', function() {
-            flyTarget = null;
-        });
         
         scene.add(new THREE.AmbientLight(0x222244, 0.3));
         var sunLight = new THREE.PointLight(0xfff5e6, 2.5, 3000);
@@ -241,29 +237,8 @@
                 if(d.radius)h+='<div class="stat"><span class="stat-label">半径</span><span class="stat-value">'+d.radius.toFixed(0)+' km</span></div>';
                 if(d.moons!==undefined)h+='<div class="stat"><span class="stat-label">卫星</span><span class="stat-value">'+d.moons+' 颗</span></div>';
                 if(d.description)h+='<p class="planet-desc">'+d.description+'</p>';
-                // 添加跟随按钮
-                h+='<button id="track-btn" style="margin-top:12px;width:100%;padding:8px;background:rgba(96,165,250,0.2);border:1px solid rgba(96,165,250,0.5);color:#60a5fa;border-radius:6px;cursor:pointer;font-size:13px;">🎯 跟随此行星</button>';
+                h+='<div style="margin-top:10px;color:rgba(255,255,255,0.4);font-size:11px;">已自动跟踪 · 点击空白处退出</div>';
                 if(pi)pi.innerHTML=h;
-                
-                // 绑定跟随按钮事件
-                setTimeout(function() {
-                    var tb = document.getElementById('track-btn');
-                    if(tb) {
-                        tb.addEventListener('click', function() {
-                            if(trackTarget === mesh) {
-                                trackTarget = null;
-                                tb.textContent = '🎯 跟随此行星';
-                                tb.style.background = 'rgba(96,165,250,0.2)';
-                            } else {
-                                trackTarget = mesh;
-                                tb.textContent = '✕ 取消跟随';
-                                tb.style.background = 'rgba(250,100,100,0.3)';
-                                tb.style.borderColor = 'rgba(250,100,100,0.5)';
-                                tb.style.color = '#ff9999';
-                            }
-                        });
-                    }
-                }, 0);
             }
         }
 
@@ -287,11 +262,7 @@
             }
             if(e.code==='Escape'){
                 trackTarget = null;
-                var tb = document.getElementById('track-btn');
-                if(tb) {
-                    tb.textContent = '🎯 跟随此行星';
-                    tb.style.background = 'rgba(96,165,250,0.2)';
-                }
+                document.getElementById('info-panel').style.display='none';
             }
         });
 
@@ -300,18 +271,24 @@
             var rc=new THREE.Raycaster();rc.setFromCamera(msv,camera);
             var tg=planets.map(function(p){return p.mesh;});tg.push(sunMesh);if(moon)tg.push(moon.mesh);
             var hits=rc.intersectObjects(tg,true);
+            
             if(hits.length>0){
+                // 点击到行星
                 var clickObj=hits[0].object;
                 while(clickObj.parent&&!clickObj.userData.name){clickObj=clickObj.parent;}
                 var d=clickObj.userData;
+                
+                // 默认跟踪此行星
+                trackTarget = clickObj;
+                
                 if(clickObj!==sunMesh){
                     var pos=clickObj.position.clone();
                     var baseR=clickObj.geometry.parameters.radius||1;
-                    var curDist=camera.position.distanceTo(pos);
-                    var vd=baseR*4;
-                    flyTarget={pos:pos, cam:new THREE.Vector3(pos.x+vd,pos.y+vd*0.5,pos.z+vd), mesh:clickObj};
+                    var vd=baseR*5;
+                    flyTarget={pos:pos, cam:new THREE.Vector3(pos.x+vd,pos.y+vd*0.4,pos.z+vd), mesh:clickObj};
+                    flyProgress = 0;
                     controls.minDistance=baseR*2;
-                    controls.maxDistance=Math.max(800, curDist*2);
+                    controls.maxDistance=800;
                 }
                 showPlanetInfo(d, clickObj);
                 if(window._measureFrom&&clickObj!==sunMesh){
@@ -327,6 +304,10 @@
                     }
                     window._measureFrom=null;window._measureName='';
                 }
+            } else {
+                // 点击空白处：退出跟踪，关闭面板
+                trackTarget = null;
+                document.getElementById('info-panel').style.display='none';
             }
         });
 
@@ -361,21 +342,31 @@
             p.mesh.rotation.y+=dt*0.5;
         });
         
-        // 渐进飞行
-        if(flyTarget && flyTarget.mesh){
-            var targetPos = flyTarget.mesh.position.clone();
-            flyTarget.cam.x = targetPos.x + (flyTarget.cam.x - flyTarget.pos.x);
-            flyTarget.cam.z = targetPos.z + (flyTarget.cam.z - flyTarget.pos.z);
-            flyTarget.pos = targetPos;
-            camera.position.lerp(flyTarget.cam,0.06);
-            controls.target.lerp(flyTarget.pos,0.06);
-            if(camera.position.distanceTo(flyTarget.cam)<0.3){
-                flyTarget=null;
+        // 飞行动画：一次性完成，不干扰用户操作
+        if(flyTarget && flyProgress < 1){
+            flyProgress += 0.04; // 约25帧完成
+            if(flyProgress > 1) flyProgress = 1;
+            
+            var targetPos = flyTarget.mesh ? flyTarget.mesh.position.clone() : flyTarget.pos;
+            var camTarget = flyTarget.cam.clone();
+            
+            if(flyTarget.mesh){
+                // 动态计算目标相机位置
+                var offset = flyTarget.cam.clone().sub(flyTarget.pos);
+                camTarget = targetPos.clone().add(offset);
+            }
+            
+            camera.position.lerp(camTarget, flyProgress);
+            controls.target.lerp(targetPos, flyProgress);
+            
+            if(flyProgress >= 1){
+                flyTarget = null;
+                flyProgress = 0;
             }
         }
         
-        // 跟踪模式：持续跟随行星
-        if(trackTarget && !flyTarget){
+        // 跟踪模式：只更新 target，不影响相机位置
+        if(trackTarget){
             controls.target.copy(trackTarget.position);
         }
         
