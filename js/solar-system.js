@@ -171,8 +171,8 @@
                     // 夏至点(6月21日) = 角度 π/2
                     // 秋分点(9月23日) = 角度 π
                     // 冬至点(12月22日) = 角度 3π/2
-                    // 4月10日距离春分约20天 = 20/365 * 2π ≈ 0.35 弧度 ≈ 20度
                     angle = (daysSinceSpringEquinox / 365.25) * 2 * Math.PI;
+                    console.log('Earth position - Days since spring:', daysSinceSpringEquinox.toFixed(1), 'Angle:', (angle * 180 / Math.PI).toFixed(1) + '°');
                 } else {
                     // 其他行星：从J2000开始计算
                     var meanMotion = 2 * Math.PI / d.orbital_period;
