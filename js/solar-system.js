@@ -282,6 +282,27 @@
                     initialRotation = toSun + rotationFromNoon;
                     mesh.rotation.y = initialRotation;
                     console.log('Earth: Beijing', beijingHour.toFixed(1), 'rotation:', (initialRotation*180/Math.PI).toFixed(1) + '°');
+                    
+                    // 北京标记：东经116度，北纬40度
+                    var beijingLonDeg = 116;
+                    var beijingLatDeg = 40;
+                    // Three.js球体经度计算：Z轴=0°，X轴=90°
+                    // 需要调整让经度116°对应北京
+                    var beijingLon = (beijingLonDeg - 90) * Math.PI / 180;
+                    var beijingLat = beijingLatDeg * Math.PI / 180;
+                    
+                    var markerR = radius * 1.02;
+                    var mx = markerR * Math.cos(beijingLat) * Math.sin(beijingLon);
+                    var my = markerR * Math.sin(beijingLat);
+                    var mz = markerR * Math.cos(beijingLat) * Math.cos(beijingLon);
+                    
+                    var beijingMarker = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.15, 8, 8),
+                        new THREE.MeshBasicMaterial({color: 0xff0000})
+                    );
+                    beijingMarker.position.set(mx, my, mz);
+                    mesh.add(beijingMarker);
+                    console.log('Beijing marker: lon', beijingLonDeg, 'lat', beijingLatDeg);
                 }
                 
                 // 椭圆轨道线
