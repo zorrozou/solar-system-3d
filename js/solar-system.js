@@ -178,9 +178,11 @@
                     var utcHour = simDate.getUTCHours() + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600;
                     // 地球朝向太阳的角度
                     var toSun = Math.atan2(-x0, -z0);
-                    // UTC 12:00 时本初子午线正对太阳
+                    // UTC 0:00 时本初子午线背对太阳（午夜）
+                    // UTC 12:00 时本初子午线正对太阳（正午）
                     // 调整自转角度让当前时间的经线处于正确位置
-                    initialRotation = toSun + Math.PI - (utcHour - 12) * Math.PI / 12;
+                    // 注意：纹理映射可能需要调整方向
+                    initialRotation = toSun - (utcHour) * Math.PI / 12;
                 }
                 
                 // 纹理
