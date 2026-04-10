@@ -178,24 +178,26 @@
                 pivot.add(mesh);
                 
                 // 自转轴指示器（放在容器下，不跟着球体自转）
-                var axisLength = radius * 2;
-                var axisGeometry = new THREE.CylinderGeometry(0.03, 0.03, axisLength * 2, 8);
-                var axisMaterial = new THREE.MeshBasicMaterial({color: 0x44aaff, transparent: true, opacity: 0.7});
+                // 自转轴 = 行星围绕旋转的轴，穿过南北极
+                var axisLength = radius * 2.5;
+                var axisGeometry = new THREE.CylinderGeometry(0.04, 0.04, axisLength * 2, 8);
+                var axisMaterial = new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.8});
                 var axisMesh = new THREE.Mesh(axisGeometry, axisMaterial);
+                // 圆柱默认沿Y轴，在pivot坐标系下Y轴就是自转轴方向
                 pivot.add(axisMesh);
                 
-                // 北极标记
+                // 北极标记（绿色）
                 var northPole = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.1, 8, 8),
-                    new THREE.MeshBasicMaterial({color: 0x66ccff})
+                    new THREE.SphereGeometry(0.12, 8, 8),
+                    new THREE.MeshBasicMaterial({color: 0x00ff00})
                 );
                 northPole.position.y = axisLength;
                 axisMesh.add(northPole);
                 
-                // 南极标记
+                // 南极标记（红色）
                 var southPole = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.08, 8, 8),
-                    new THREE.MeshBasicMaterial({color: 0x4488cc})
+                    new THREE.SphereGeometry(0.1, 8, 8),
+                    new THREE.MeshBasicMaterial({color: 0xff0000})
                 );
                 southPole.position.y = -axisLength;
                 axisMesh.add(southPole);
@@ -359,7 +361,15 @@
         var sv = document.getElementById('speed-value');
         if(sl) sl.addEventListener('input', function(){ 
             speedMultiplier = parseFloat(this.value); 
-            if(sv) sv.textContent = speedMultiplier.toFixed(0) + 'x'; 
+            if(sv) {
+                if(speedMultiplier >= 1000000) {
+                    sv.textContent = (speedMultiplier / 1000000).toFixed(1) + 'Mx';
+                } else if(speedMultiplier >= 1000) {
+                    sv.textContent = (speedMultiplier / 1000).toFixed(1) + 'Kx';
+                } else {
+                    sv.textContent = speedMultiplier.toFixed(0) + 'x';
+                }
+            }
         });
         
         var pb = document.getElementById('pause-btn');
