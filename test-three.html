@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Three.js 测试</title>
+</head>
+<body>
+    <div id="test"></div>
+    <script>
+        console.log('=== Three.js 测试开始 ===');
+
+        if (typeof THREE === 'undefined') {
+            console.error('THREE 未定义');
+            document.getElementById('test').textContent = 'THREE 未定义，请检查 Three.js 加载';
+            document.getElementById('test').style.color = 'red';
+        } else {
+            console.log('THREE 存在，版本:', THREE.REVISION);
+
+            try {
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer();
+                renderer.setSize(512, 512);
+                document.body.appendChild(renderer.domElement);
+
+                const geo = new THREE.BoxGeometry(1, 1, 1);
+                const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const mesh = new THREE.Mesh(geo, mat);
+                scene.add(mesh);
+
+                camera.position.z = 2;
+                renderer.render(scene, camera);
+
+                console.log('✅ Three.js 工作正常');
+                document.getElementById('test').textContent = '测试成功：Three.js 工作正常 ✓';
+                document.getElementById('test').style.color = 'green';
+
+                setTimeout(() => {
+                    document.body.removeChild(renderer.domElement);
+                    document.getElementById('test').textContent = '测试完成：Three.js v' + THREE.REVISION + ' ✓';
+                }, 2000);
+
+            } catch (e) {
+                console.error('Three.js 测试失败:', e);
+                document.getElementById('test').textContent = 'Three.js 抛出错误: ' + e.message;
+                document.getElementById('test').style.color = 'red';
+            }
+        }
+    </script>
+</body>
+</html>

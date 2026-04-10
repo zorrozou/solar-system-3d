@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>调试</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #111; color: #ddd; }
+        .log { margin: 10px 0; padding: 10px; background: #222; border-left: 3px solid #f00; }
+        .ok { border-color: #0f0; }
+    </style>
+</head>
+<body>
+    <div id="log"></div>
+    <script>
+        function log(msg, ok) {
+            const div = document.getElementById('log');
+            div.innerHTML += `<div class="log ${ok?'ok':''}">${new Date().toLocaleTimeString()} - ${msg}</div>`;
+        }
+
+        log('页面加载', true);
+
+        // 检查 Three.js 加载
+        setTimeout(() => {
+            log(`typeof THREE: ${typeof THREE}`, typeof THREE !== 'undefined');
+            log(`THREE 版本: ${typeof THREE !== 'undefined' ? THREE.REVISION : 'N/A'}`, typeof THREE !== 'undefined');
+
+            // 尝试创建最简单的场景
+            try {
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(75, 1, 1000);
+                const renderer = new THREE.WebGLRenderer();
+                renderer.setSize(500, 300);
+                document.body.appendChild(renderer.domElement);
+
+                const geo = new THREE.BoxGeometry(1, 1, 1);
+                const mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const cube = new THREE.Mesh(geo, mat);
+                scene.add(cube);
+
+                camera.position.z = 2;
+                renderer.render(scene, camera);
+
+                log('✅ Three.js 基本渲染成功', true);
+
+                // 移除测试画布
+                setTimeout(() => {
+                    document.body.removeChild(renderer.domElement);
+                    log('测试画布已移除', true);
+                }, 1000);
+
+            } catch (e) {
+                log(`❌ Three.js 渲染失败: ${e.message}`, false);
+            }
+        }, 500);
+    </script>
+</body>
+</html>
