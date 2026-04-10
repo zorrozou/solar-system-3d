@@ -284,7 +284,7 @@
                     console.log('Earth: Beijing', beijingHour.toFixed(1), 'rotation:', (initialRotation*180/Math.PI).toFixed(1) + '°');
                     
                     // 北京标记：东经116度，北纬40度
-                    var beijingLonDeg = 116;
+                    var beijingLonDeg = 64;
                     var beijingLatDeg = 40;
                     // Three.js球体经度计算：Z轴=0°，X轴=90°
                     // 需要调整让经度116°对应北京
