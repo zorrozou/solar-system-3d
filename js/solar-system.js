@@ -166,9 +166,13 @@
                 // 根据当前日期计算初始角度
                 var angle = 0;
                 if(d.name === 'Earth'){
-                    // 地球：从春分点开始计算
-                    // 春分时地球在角度0，之后往夏至（π/2）方向移动
-                    angle = (daysSinceSpringEquinox / d.orbital_period) * 2 * Math.PI;
+                    // 地球公转角度：从春分点开始
+                    // 春分点(3月20日) = 角度0
+                    // 夏至点(6月21日) = 角度 π/2
+                    // 秋分点(9月23日) = 角度 π
+                    // 冬至点(12月22日) = 角度 3π/2
+                    // 4月10日距离春分约20天 = 20/365 * 2π ≈ 0.35 弧度 ≈ 20度
+                    angle = (daysSinceSpringEquinox / 365.25) * 2 * Math.PI;
                 } else {
                     // 其他行星：从J2000开始计算
                     var meanMotion = 2 * Math.PI / d.orbital_period;
