@@ -186,21 +186,26 @@
                 // 地球特殊处理：根据当前时间设置初始自转角度
                 var initialRotation = 0;
                 if(d.name === 'Earth'){
-                    // 北京时间 22:45 = UTC 14:45
-                    // 中国在东经120度，晚上应该背对太阳
-                    var utcHour = simDate.getUTCHours() + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600;
-                    var beijingHour = (utcHour + 8) % 24; // 北京时间
+                    // 北京时间 22:48 = 晚上，中国应该背对太阳
+                    var beijingHour = (simDate.getUTCHours() + 8 + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600) % 24;
                     
                     // 地球朝向太阳的角度
                     var toSun = Math.atan2(-x0, -z0);
                     
-                    // 北京时间24点（午夜）= 中国背对太阳
-                    // 北京时间12点（正午）= 中国正对太阳
-                    // 自转角度 = 让中国在正确的时间处于正确的光照
-                    // 北京时间每过1小时，地球需要转15度
-                    initialRotation = toSun - (beijingHour) * Math.PI / 12;
+                    // 计算逻辑：
+                    // 北京时间12:00，中国正对太阳，经线120°朝向太阳
+                    // 北京时间22:48，中国已经转过约10.8小时 = 162度
+                    // 中国现在应该背对太阳（晚上）
+                    // 
+                    // 自转角度 = 让中国经线在正确位置
+                    // 北京时间每过1小时，地球自转15度
+                    // 从正午开始计算：(beijingHour - 12) * 15度
+                    var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
                     
-                    console.log('Earth rotation - Beijing:', beijingHour.toFixed(2), 'toSun:', (toSun*180/Math.PI).toFixed(1), 'initialRotation:', (initialRotation*180/Math.PI).toFixed(1));
+                    // 地球朝向太阳的角度 + 让中国经线在正确位置的偏移
+                    initialRotation = toSun + rotationFromNoon;
+                    
+                    console.log('Earth rotation - Beijing:', beijingHour.toFixed(2), 'toSun:', (toSun*180/Math.PI).toFixed(1), 'rotation:', (rotationFromNoon*180/Math.PI).toFixed(1), 'initialRotation:', (initialRotation*180/Math.PI).toFixed(1));
                 }
                 
                 // 纹理
