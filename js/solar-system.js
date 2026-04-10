@@ -168,39 +168,31 @@
                     ? new THREE.MeshPhongMaterial({map: texture, shininess: 15})
                     : new THREE.MeshPhongMaterial({color: d.color || 0x888888, shininess: 15});
                 
-                var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat);
+                // 用容器分离轴倾角和自转
+                var pivot = new THREE.Object3D(); // 容器：处理轴倾角
+                var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat); // 球体：处理自转
                 
-                // 初始位置
-                var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
-                var x0 = r0 * Math.cos(angle);
-                var z0 = r0 * Math.sin(angle);
-                mesh.position.set(x0, z0 * Math.sin(inclination), z0 * Math.cos(inclination));
-                
-                mesh.userData = d;
-                
-                // 轴倾角（绕Z轴旋转）
+                // 轴倾角（容器的Z轴旋转）
                 var axialTilt = (d.axial_tilt || 0) * Math.PI / 180;
-                mesh.rotation.z = axialTilt;
+                pivot.rotation.z = axialTilt;
+                pivot.add(mesh);
                 
-                scene.add(mesh);
-                
-                // 自转轴指示器（沿行星Y轴方向，即自转轴）
+                // 自转轴指示器（放在容器下，不跟着球体自转）
                 var axisLength = radius * 2;
                 var axisGeometry = new THREE.CylinderGeometry(0.03, 0.03, axisLength * 2, 8);
                 var axisMaterial = new THREE.MeshBasicMaterial({color: 0x44aaff, transparent: true, opacity: 0.7});
                 var axisMesh = new THREE.Mesh(axisGeometry, axisMaterial);
-                // 圆柱默认沿Y轴，正好是自转轴方向，不需要旋转
-                mesh.add(axisMesh);
+                pivot.add(axisMesh);
                 
-                // 北极标记（顶部小球）
+                // 北极标记
                 var northPole = new THREE.Mesh(
                     new THREE.SphereGeometry(0.1, 8, 8),
                     new THREE.MeshBasicMaterial({color: 0x66ccff})
                 );
-                northPole.position.y = axisLength; // Y轴正方向是北
+                northPole.position.y = axisLength;
                 axisMesh.add(northPole);
                 
-                // 南极标记（底部小球，稍小）
+                // 南极标记
                 var southPole = new THREE.Mesh(
                     new THREE.SphereGeometry(0.08, 8, 8),
                     new THREE.MeshBasicMaterial({color: 0x4488cc})
@@ -208,21 +200,16 @@
                 southPole.position.y = -axisLength;
                 axisMesh.add(southPole);
                 
-                // 椭圆轨道线
-                var oPts = [];
-                for(var i = 0; i <= 128; i++){
-                    var theta = i / 128 * Math.PI * 2;
-                    var rOrbit = a * (1 - e * e) / (1 + e * Math.cos(theta));
-                    var x = rOrbit * Math.cos(theta);
-                    var z = rOrbit * Math.sin(theta);
-                    oPts.push(new THREE.Vector3(x, z * Math.sin(inclination), z * Math.cos(inclination)));
-                }
-                scene.add(new THREE.Line(
-                    new THREE.BufferGeometry().setFromPoints(oPts),
-                    new THREE.LineBasicMaterial({color:0x334455, transparent:true, opacity:0.5})
-                ));
+                // 初始位置
+                var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
+                var x0 = r0 * Math.cos(angle);
+                var z0 = r0 * Math.sin(angle);
+                pivot.position.set(x0, z0 * Math.sin(inclination), z0 * Math.cos(inclination));
                 
-                // 土星环
+                mesh.userData = d;
+                scene.add(pivot);
+                
+                // 土星环（跟球体一起自转）
                 if(d.name === 'Saturn'){
                     var ring = new THREE.Mesh(
                         new THREE.RingGeometry(radius*1.3, radius*2.2, 64),
@@ -241,6 +228,20 @@
                     mesh.add(uRing);
                 }
                 
+                // 椭圆轨道线
+                var oPts = [];
+                for(var i = 0; i <= 128; i++){
+                    var theta = i / 128 * Math.PI * 2;
+                    var rOrbit = a * (1 - e * e) / (1 + e * Math.cos(theta));
+                    var x = rOrbit * Math.cos(theta);
+                    var z = rOrbit * Math.sin(theta);
+                    oPts.push(new THREE.Vector3(x, z * Math.sin(inclination), z * Math.cos(inclination)));
+                }
+                scene.add(new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints(oPts),
+                    new THREE.LineBasicMaterial({color:0x334455, transparent:true, opacity:0.5})
+                ));
+                
                 // 标签
                 var label = document.createElement('div');
                 label.textContent = d.name_cn || d.name;
@@ -253,9 +254,10 @@
                 (function(m, r){
                     label.addEventListener('click', function(e){ e.stopPropagation(); startTrack(m, r); });
                     label.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); startTrack(m, r); });
-                })(mesh, radius);
+                })(pivot, radius);
                 
                 planets.push({
+                    pivot: pivot,
                     mesh: mesh, 
                     data: d, 
                     angle: angle, 
@@ -411,22 +413,22 @@
         if(moon){
             // 月球公转周期约27.3天
             moon.angle += dt_days / 27.3 * 2 * Math.PI;
-            moon.mesh.position.x = moon.earth.mesh.position.x + Math.cos(moon.angle) * moon.dist;
-            moon.mesh.position.z = moon.earth.mesh.position.z + Math.sin(moon.angle) * moon.dist;
+            moon.mesh.position.x = moon.earth.pivot.position.x + Math.cos(moon.angle) * moon.dist;
+            moon.mesh.position.z = moon.earth.pivot.position.z + Math.sin(moon.angle) * moon.dist;
             // 月球自转周期 = 公转周期（潮汐锁定）
             moon.mesh.rotation.y = moon.angle;
         }
         
         // 行星公转和自转
         planets.forEach(function(p){
-            // 公转：角度增量 = dt_days / 公转周期 * 2π
+            // 公转：角度增量 = dt_days / 公转周期 * 2π，位置更新用 pivot
             p.angle += dt_days / p.data.orbital_period * 2 * Math.PI;
             var r = p.a * (1 - p.e * p.e) / (1 + p.e * Math.cos(p.angle));
             var x = r * Math.cos(p.angle);
             var z = r * Math.sin(p.angle);
-            p.mesh.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
+            p.pivot.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
             
-            // 自转：绕Y轴旋转，角度增量 = dt_days / 自转周期 * 2π
+            // 自转：绕Y轴旋转，只用 mesh
             var rotationPeriod = p.data.rotation_period || 1;
             var rotationDir = rotationPeriod < 0 ? -1 : 1; // 金星逆向自转
             p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
@@ -464,7 +466,7 @@
         // 标签
         planets.forEach(function(p){
             if(p.label){
-                var v = p.mesh.position.clone();
+                var v = p.pivot.position.clone();
                 v.y += p.mesh.geometry.parameters.radius + 0.5;
                 v.project(camera);
                 if(v.z < 1){
