@@ -558,12 +558,14 @@
         }
         
         // 飞行动画
-        if(isFlying && flyStart && flyEnd){
+        if(isFlying && flyStart && flyEnd && flyStart.cam && flyEnd.cam){
             flyProgress += 0.02;
             if(flyProgress >= 1){ flyProgress = 1; isFlying = false; flyStart = null; flyEnd = null; }
-            var t = flyProgress < 0.5 ? 2 * flyProgress * flyProgress : 1 - Math.pow(-2 * flyProgress + 2, 2) / 2;
-            camera.position.lerpVectors(flyStart.cam, flyEnd.cam, t);
-            controls.target.lerpVectors(flyStart.target, flyEnd.target, t);
+            else {
+                var t = flyProgress < 0.5 ? 2 * flyProgress * flyProgress : 1 - Math.pow(-2 * flyProgress + 2, 2) / 2;
+                camera.position.lerpVectors(flyStart.cam, flyEnd.cam, t);
+                controls.target.lerpVectors(flyStart.target, flyEnd.target, t);
+            }
         }
         
         // 跟踪
