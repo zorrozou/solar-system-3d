@@ -164,18 +164,17 @@
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
                 
                 // 根据当前日期计算初始角度
-                var angle = 0;
-                if(d.name === 'Earth'){
-                    // 地球：从春分点开始计算（季节更直观）
-                    // 春分点(3月20日) = 角度0
-                    angle = (daysSinceSpringEquinox / 365.25) * 2 * Math.PI;
-                } else {
-                    // 其他行星：使用 J2000 平均近点角
-                    var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180;
-                    var meanMotion = 2 * Math.PI / d.orbital_period;
-                    angle = M0 + meanMotion * daysSinceEpoch;
-                    angle = angle % (2 * Math.PI);
-                }
+                // 使用 J2000 平均近点角和近日点经度
+                var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180; // J2000 平均近点角
+                var omega = (d.perihelion_longitude || 0) * Math.PI / 180; // 近日点经度
+                var meanMotion = 2 * Math.PI / d.orbital_period;
+                
+                // 平均近点角 M = M0 + n × t
+                var M = M0 + meanMotion * daysSinceEpoch;
+                
+                // 从春分点开始的角度 = M + ω（近日点经度）
+                var angle = M + omega;
+                angle = angle % (2 * Math.PI); // 归一化
                 
                 // 计算初始位置
                 var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));

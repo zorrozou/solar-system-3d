@@ -34,6 +34,7 @@ try {
             'axial_tilt' => (float)($row['axial_tilt'] ?? 0),
             'eccentricity' => (float)($row['eccentricity'] ?? 0),
             'mean_anomaly_j2000' => (float)($row['mean_anomaly_j2000'] ?? 0),
+            'perihelion_longitude' => (float)($row['perihelion_longitude'] ?? 0),
         ];
     }
     echo json_encode($planets, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
