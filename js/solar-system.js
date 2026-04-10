@@ -383,7 +383,62 @@
             if(e.code === 'Escape') stopTrack();
         });
 
-        renderer.domElement.addEventListener('click', function(){ if(trackTarget) stopTrack(); });
+        // 点击/拖动检测
+        var mouseDownPos = null;
+        var isMouseDrag = false;
+        
+        renderer.domElement.addEventListener('mousedown', function(e){
+            mouseDownPos = {x: e.clientX, y: e.clientY};
+            isMouseDrag = false;
+        });
+        
+        renderer.domElement.addEventListener('mousemove', function(e){
+            if(mouseDownPos){
+                var dx = e.clientX - mouseDownPos.x;
+                var dy = e.clientY - mouseDownPos.y;
+                if(Math.sqrt(dx*dx + dy*dy) > 5){
+                    isMouseDrag = true; // 移动超过5px就是拖动
+                }
+            }
+        });
+        
+        renderer.domElement.addEventListener('mouseup', function(e){
+            // 只有不是拖动，才检测是否退出跟踪
+            if(!isMouseDrag && trackTarget){
+                stopTrack();
+            }
+            mouseDownPos = null;
+            isMouseDrag = false;
+        });
+        
+        // 触屏设备同样处理
+        var touchDownPos = null;
+        var isTouchDrag = false;
+        
+        renderer.domElement.addEventListener('touchstart', function(e){
+            if(e.touches.length === 1){
+                touchDownPos = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+                isTouchDrag = false;
+            }
+        });
+        
+        renderer.domElement.addEventListener('touchmove', function(e){
+            if(touchDownPos && e.touches.length === 1){
+                var dx = e.touches[0].clientX - touchDownPos.x;
+                var dy = e.touches[0].clientY - touchDownPos.y;
+                if(Math.sqrt(dx*dx + dy*dy) > 10){
+                    isTouchDrag = true;
+                }
+            }
+        });
+        
+        renderer.domElement.addEventListener('touchend', function(e){
+            if(!isTouchDrag && trackTarget){
+                stopTrack();
+            }
+            touchDownPos = null;
+            isTouchDrag = false;
+        });
 
         window.addEventListener('resize', function(){
             camera.aspect = window.innerWidth / window.innerHeight;
