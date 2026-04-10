@@ -9,6 +9,10 @@
     var asteroidBelt = null;
     var asteroidAngles = [];
     
+    // 模拟时间（从今天开始）
+    var simDate = new Date();
+    var simDays = 0; // 模拟经过的天数
+    
     // 视角系统
     var trackTarget = null;
     var trackOffset = null;
@@ -18,11 +22,21 @@
     var flyEnd = null;
     var flyProgress = 0;
 
+    // 计算从J2000.0到指定日期的天数
+    function daysSinceJ2000(date) {
+        // J2000.0 = 2000-01-01 12:00 UTC
+        var j2000 = new Date(Date.UTC(2000, 0, 1, 12, 0, 0));
+        return (date.getTime() - j2000.getTime()) / (1000 * 60 * 60 * 24);
+    }
+
     function init() {
         try {
         if (typeof THREE === 'undefined') {
             document.getElementById('loading').textContent = 'THREE 未定义'; return;
         }
+        
+        // 初始化模拟时间显示
+        updateSimDateDisplay();
         
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 20000);
@@ -74,7 +88,7 @@
             new THREE.SphereGeometry(5, 32, 32),
             new THREE.MeshBasicMaterial({color: 0xFDB813})
         );
-        sunMesh.userData = {name:'Sun',name_cn:'太阳',description:'太阳是太阳系的中心天体，占太阳系总质量的99.86%'};
+        sunMesh.userData = {name:'Sun',name_cn:'太阳',description:'太阳是太阳系的中心天体，占太阳系总质量的99.86%', rotation_period: 25.4};
         scene.add(sunMesh);
         
         // 太阳光晕
@@ -89,7 +103,6 @@
         sp.scale.set(30,30,1);
         sunMesh.add(sp);
 
-        // 土星环纹理
         function createSaturnRingTexture() {
             var canvas = document.createElement('canvas');
             canvas.width = 512; canvas.height = 64;
@@ -110,7 +123,6 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        // 天王星环纹理
         function createUranusRingTexture() {
             var canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 32;
@@ -127,17 +139,26 @@
         }
 
         var texLoader = new THREE.TextureLoader();
+        
+        // 计算当前日期相对于J2000的天数
+        var daysSinceEpoch = daysSinceJ2000(simDate);
 
         // 加载行星数据
         fetch('/solar-system/api/planets.php').then(function(r){return r.json();}).then(function(data){
             data.forEach(function(d){
-                // 轨道参数（效果缩放）
-                var a = d.distance_from_sun * 30 + 10;  // 半长轴
-                var e = (d.eccentricity || 0) * 0.3;     // 偏心率（缩放到30%效果）
-                var b = a * Math.sqrt(1 - e * e);       // 半短轴
-                var inclination = (d.orbital_inclination || 0) * 0.3 * Math.PI / 180; // 轨道倾角（缩放到30%）
+                // 轨道参数
+                var a = d.distance_from_sun * 30 + 10;
+                var e = (d.eccentricity || 0) * 0.3;
+                var b = a * Math.sqrt(1 - e * e);
+                var inclination = (d.orbital_inclination || 0) * 0.3 * Math.PI / 180;
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
-                var angle = Math.random() * Math.PI * 2;
+                
+                // 根据当前日期计算初始角度（简化的开普勒方程）
+                // 平均运动：每天转过的角度 = 2π / 公转周期
+                var meanMotion = 2 * Math.PI / d.orbital_period;
+                var meanAnomaly = (meanMotion * daysSinceEpoch) % (2 * Math.PI);
+                // 简化：用平均近点角作为真近点角（忽略偏心率带来的差异）
+                var angle = meanAnomaly;
                 
                 // 纹理
                 var texture = null;
@@ -149,15 +170,35 @@
                 
                 var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat);
                 
-                // 初始位置（椭圆轨道）
+                // 初始位置
                 var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
                 var x0 = r0 * Math.cos(angle);
                 var z0 = r0 * Math.sin(angle);
                 mesh.position.set(x0, z0 * Math.sin(inclination), z0 * Math.cos(inclination));
                 
                 mesh.userData = d;
-                mesh.rotation.z = (d.axial_tilt || 0) * Math.PI / 180;
+                
+                // 轴倾角（绕Z轴旋转）
+                var axialTilt = (d.axial_tilt || 0) * Math.PI / 180;
+                mesh.rotation.z = axialTilt;
+                
                 scene.add(mesh);
+                
+                // 自转轴指示器
+                var axisLength = radius * 1.8;
+                var axisGeometry = new THREE.CylinderGeometry(0.02, 0.02, axisLength * 2, 8);
+                var axisMaterial = new THREE.MeshBasicMaterial({color: 0x66aaff, transparent: true, opacity: 0.6});
+                var axisMesh = new THREE.Mesh(axisGeometry, axisMaterial);
+                axisMesh.rotation.x = Math.PI / 2; // 让圆柱垂直
+                mesh.add(axisMesh);
+                
+                // 自转轴顶部小球
+                var axisTop = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.08, 8, 8),
+                    new THREE.MeshBasicMaterial({color: 0x88ccff})
+                );
+                axisTop.position.y = axisLength;
+                axisMesh.add(axisTop);
                 
                 // 椭圆轨道线
                 var oPts = [];
@@ -206,7 +247,16 @@
                     label.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); startTrack(m, r); });
                 })(mesh, radius);
                 
-                planets.push({mesh:mesh, data:d, angle:angle, a:a, e:e, inclination:inclination, label:label});
+                planets.push({
+                    mesh: mesh, 
+                    data: d, 
+                    angle: angle, 
+                    a: a, 
+                    e: e, 
+                    inclination: inclination,
+                    label: label,
+                    axialTilt: axialTilt
+                });
             });
             
             // 月球
@@ -274,20 +324,33 @@
             if(pn) pn.textContent = (d.name_cn || d.name) + ' (' + d.name + ')';
             var h = '';
             if(d.distance_from_sun) h += '<div class="stat"><span class="stat-label">距太阳</span><span class="stat-value">'+d.distance_from_sun+' AU</span></div>';
-            if(d.orbital_period) h += '<div class="stat"><span class="stat-label">公转周期</span><span class="stat-value">'+d.orbital_period+' 天</span></div>';
+            if(d.orbital_period) h += '<div class="stat"><span class="stat-label">公转周期</span><span class="stat-value">'+d.orbital_period.toFixed(1)+' 天</span></div>';
+            if(d.rotation_period) h += '<div class="stat"><span class="stat-label">自转周期</span><span class="stat-value">'+d.rotation_period.toFixed(2)+' 天</span></div>';
             if(d.radius) h += '<div class="stat"><span class="stat-label">半径</span><span class="stat-value">'+d.radius.toFixed(0)+' km</span></div>';
             if(d.moons !== undefined) h += '<div class="stat"><span class="stat-label">卫星</span><span class="stat-value">'+d.moons+' 颗</span></div>';
-            if(d.eccentricity > 0.01) h += '<div class="stat"><span class="stat-label">轨道偏心率</span><span class="stat-value">'+d.eccentricity.toFixed(4)+'</span></div>';
-            if(d.orbital_inclination > 0.1) h += '<div class="stat"><span class="stat-label">轨道倾角</span><span class="stat-value">'+d.orbital_inclination.toFixed(1)+'°</span></div>';
+            if(d.axial_tilt) h += '<div class="stat"><span class="stat-label">轴倾角</span><span class="stat-value">'+d.axial_tilt.toFixed(1)+'°</span></div>';
             if(d.description) h += '<p class="planet-desc">'+d.description+'</p>';
             h += '<div style="margin-top:10px;color:rgba(255,255,255,0.4);font-size:11px;">跟踪中 · 点击空白退出</div>';
             if(pi) pi.innerHTML = h;
         }
 
+        // 更新模拟时间显示
+        function updateSimDateDisplay() {
+            var displayDate = new Date(simDate.getTime() + simDays * 24 * 60 * 60 * 1000);
+            var dateStr = displayDate.getFullYear() + '-' + 
+                          String(displayDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                          String(displayDate.getDate()).padStart(2, '0');
+            var el = document.getElementById('sim-date');
+            if(el) el.textContent = dateStr;
+        }
+
         // 事件监听
         var sl = document.getElementById('speed-control');
         var sv = document.getElementById('speed-value');
-        if(sl) sl.addEventListener('input', function(){ speedMultiplier = parseFloat(this.value); if(sv) sv.textContent = speedMultiplier.toFixed(0) + 'x'; });
+        if(sl) sl.addEventListener('input', function(){ 
+            speedMultiplier = parseFloat(this.value); 
+            if(sv) sv.textContent = speedMultiplier.toFixed(0) + 'x'; 
+        });
         
         var pb = document.getElementById('pause-btn');
         if(pb) pb.addEventListener('click', function(){ paused = !paused; pb.textContent = paused ? '▶ 继续' : '⏸ 暂停'; });
@@ -316,37 +379,52 @@
         requestAnimationFrame(animate);
         var dt = paused ? 0 : speedMultiplier * 0.01;
         
-        // 太阳
+        // 更新模拟天数（dt 是模拟的天数增量）
+        simDays += dt;
+        
+        // 每100帧更新一次日期显示
+        if(Math.floor(simDays * 10) % 10 === 0) {
+            updateSimDateDisplay();
+        }
+        
+        // 太阳自转（真实周期约25.4天）
         if(sunMesh){
-            sunMesh.rotation.y += dt * 0.02;
+            var sunRotationPeriod = 25.4;
+            sunMesh.rotation.y += dt / sunRotationPeriod * 2 * Math.PI;
             sunPulse += dt * 0.5;
             sunMesh.scale.setScalar(1 + Math.sin(sunPulse) * 0.02);
         }
         
         // 月球
         if(moon){
-            moon.angle += dt * 0.07;
+            // 月球公转周期约27.3天
+            moon.angle += dt / 27.3 * 2 * Math.PI;
             moon.mesh.position.x = moon.earth.mesh.position.x + Math.cos(moon.angle) * moon.dist;
             moon.mesh.position.z = moon.earth.mesh.position.z + Math.sin(moon.angle) * moon.dist;
-            moon.mesh.rotation.y += dt * 0.3;
+            // 月球自转周期 = 公转周期（潮汐锁定）
+            moon.mesh.rotation.y = moon.angle;
         }
         
-        // 行星公转（椭圆轨道 + 倾角）
+        // 行星公转和自转
         planets.forEach(function(p){
-            p.angle += dt / p.data.orbital_period;
+            // 公转：角度增量 = dt / 公转周期 * 2π
+            p.angle += dt / p.data.orbital_period * 2 * Math.PI;
             var r = p.a * (1 - p.e * p.e) / (1 + p.e * Math.cos(p.angle));
             var x = r * Math.cos(p.angle);
             var z = r * Math.sin(p.angle);
             p.mesh.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
-            p.mesh.rotation.y += dt * 0.5;
+            
+            // 自转：绕Y轴旋转，角度增量 = dt / 自转周期 * 2π
+            var rotationPeriod = p.data.rotation_period || 1;
+            var rotationDir = rotationPeriod < 0 ? -1 : 1; // 金星逆向自转
+            p.mesh.rotation.y += rotationDir * dt / Math.abs(rotationPeriod) * 2 * Math.PI;
         });
         
         // 小行星带公转
         if(asteroidBelt){
             var positions = asteroidBelt.geometry.attributes.position.array;
             for(var i = 0; i < asteroidAngles.length; i++){
-                asteroidAngles[i] += dt * 0.0002; // 慢速公转
-                var r = positions[i*3]; // 保持原距离
+                asteroidAngles[i] += dt * 0.0002;
                 var dist = Math.sqrt(positions[i*3]*positions[i*3] + positions[i*3+2]*positions[i*3+2]);
                 positions[i*3] = Math.cos(asteroidAngles[i]) * dist;
                 positions[i*3+2] = Math.sin(asteroidAngles[i]) * dist;
@@ -388,6 +466,15 @@
         
         controls.update();
         renderer.render(scene, camera);
+    }
+    
+    function updateSimDateDisplay() {
+        var displayDate = new Date(simDate.getTime() + simDays * 24 * 60 * 60 * 1000);
+        var dateStr = displayDate.getFullYear() + '-' + 
+                      String(displayDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                      String(displayDate.getDate()).padStart(2, '0');
+        var el = document.getElementById('sim-date');
+        if(el) el.textContent = dateStr;
     }
 
     if (typeof window !== 'undefined' && typeof THREE !== 'undefined') { window.THREE = THREE; }
