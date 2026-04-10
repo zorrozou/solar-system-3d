@@ -131,11 +131,11 @@
         // 加载行星数据
         fetch('/solar-system/api/planets.php').then(function(r){return r.json();}).then(function(data){
             data.forEach(function(d){
-                // 轨道参数
+                // 轨道参数（效果缩放）
                 var a = d.distance_from_sun * 30 + 10;  // 半长轴
-                var e = d.eccentricity || 0;            // 偏心率
+                var e = (d.eccentricity || 0) * 0.3;     // 偏心率（缩放到30%效果）
                 var b = a * Math.sqrt(1 - e * e);       // 半短轴
-                var inclination = (d.orbital_inclination || 0) * Math.PI / 180; // 轨道倾角
+                var inclination = (d.orbital_inclination || 0) * 0.3 * Math.PI / 180; // 轨道倾角（缩放到30%）
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
                 var angle = Math.random() * Math.PI * 2;
                 
