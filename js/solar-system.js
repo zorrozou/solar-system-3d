@@ -212,9 +212,11 @@
                 var pivot = new THREE.Object3D(); // 容器：处理轴倾角
                 var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat); // 球体：处理自转
                 
-                // 轴倾角（容器的Z轴旋转）
+                // 轴倾角：地球自转轴在空间中指向固定方向（北极星）
+                // 轴倾角绕X轴旋转，让北极轴在YZ平面倾斜
+                // 这样：春分时北极侧向太阳，夏至时北极倾向太阳，冬至时北极背离太阳
                 var axialTilt = (d.axial_tilt || 0) * Math.PI / 180;
-                pivot.rotation.z = axialTilt;
+                pivot.rotation.x = -axialTilt; // 注意：负号让北极轴在夏至时倾向太阳
                 pivot.add(mesh);
                 
                 // 自转轴指示器（放在容器下，不跟着球体自转）
