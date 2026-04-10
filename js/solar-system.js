@@ -183,6 +183,27 @@
                 var x0 = r0 * Math.cos(angle);
                 var z0 = r0 * Math.sin(angle);
                 
+                // 地球特殊处理：添加北京标记点
+                if(d.name === 'Earth'){
+                    // 北京：东经116度，北纬40度
+                    var beijingLon = 116 * Math.PI / 180;
+                    var beijingLat = 40 * Math.PI / 180;
+                    
+                    // 计算北京在球面上的位置
+                    var markerRadius = radius * 1.01;
+                    var markerX = markerRadius * Math.cos(beijingLat) * Math.sin(beijingLon);
+                    var markerY = markerRadius * Math.sin(beijingLat);
+                    var markerZ = markerRadius * Math.cos(beijingLat) * Math.cos(beijingLon);
+                    
+                    var beijingMarker = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.15, 8, 8),
+                        new THREE.MeshBasicMaterial({color: 0xff0000})
+                    );
+                    beijingMarker.position.set(markerX, markerY, markerZ);
+                    mesh.add(beijingMarker);
+                    console.log('Beijing marker added at:', markerX.toFixed(2), markerY.toFixed(2), markerZ.toFixed(2));
+                }
+                
                 // 地球特殊处理：根据当前时间设置初始自转角度
                 var initialRotation = 0;
                 if(d.name === 'Earth'){
