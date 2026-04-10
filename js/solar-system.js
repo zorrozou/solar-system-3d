@@ -163,21 +163,11 @@
                 var inclination = (d.orbital_inclination || 0) * 0.3 * Math.PI / 180;
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
                 
-                // 根据当前日期计算初始角度
-                var angle = 0;
-                if(d.name === 'Earth'){
-                    // 地球公转角度：从春分点开始
-                    // 春分点(3月20日) = 角度0
-                    // 夏至点(6月21日) = 角度 π/2
-                    // 秋分点(9月23日) = 角度 π
-                    // 冬至点(12月22日) = 角度 3π/2
-                    angle = (daysSinceSpringEquinox / 365.25) * 2 * Math.PI;
-                    console.log('Earth position - Days since spring:', daysSinceSpringEquinox.toFixed(1), 'Angle:', (angle * 180 / Math.PI).toFixed(1) + '°');
-                } else {
-                    // 其他行星：从J2000开始计算
-                    var meanMotion = 2 * Math.PI / d.orbital_period;
-                    angle = (meanMotion * daysSinceEpoch) % (2 * Math.PI);
-                }
+                // 根据当前日期计算初始角度（使用 J2000 平均近点角）
+                var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180; // J2000 平均近点角
+                var meanMotion = 2 * Math.PI / d.orbital_period;
+                var angle = M0 + meanMotion * daysSinceEpoch;
+                angle = angle % (2 * Math.PI); // 归一化到 0-2π
                 
                 // 计算初始位置
                 var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
