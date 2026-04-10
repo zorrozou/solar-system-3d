@@ -146,6 +146,12 @@
         
         // 计算当前日期相对于J2000的天数
         var daysSinceEpoch = daysSinceJ2000(simDate);
+        
+        // 春分参考点：2026年春分大约在3月20日
+        // 计算从春分点的天数（简化：取整年）
+        var currentYear = simDate.getFullYear();
+        var springEquinox = new Date(currentYear, 2, 20); // 3月20日
+        var daysSinceSpringEquinox = (simDate.getTime() - springEquinox.getTime()) / (1000 * 60 * 60 * 24);
 
         // 加载行星数据
         fetch('/solar-system/api/planets.php').then(function(r){return r.json();}).then(function(data){
@@ -157,12 +163,17 @@
                 var inclination = (d.orbital_inclination || 0) * 0.3 * Math.PI / 180;
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
                 
-                // 根据当前日期计算初始角度（简化的开普勒方程）
-                // 平均运动：每天转过的角度 = 2π / 公转周期
-                var meanMotion = 2 * Math.PI / d.orbital_period;
-                var meanAnomaly = (meanMotion * daysSinceEpoch) % (2 * Math.PI);
-                // 简化：用平均近点角作为真近点角（忽略偏心率带来的差异）
-                var angle = meanAnomaly;
+                // 根据当前日期计算初始角度
+                var angle = 0;
+                if(d.name === 'Earth'){
+                    // 地球：从春分点开始计算
+                    // 春分时地球在角度0，之后往夏至（π/2）方向移动
+                    angle = (daysSinceSpringEquinox / d.orbital_period) * 2 * Math.PI;
+                } else {
+                    // 其他行星：从J2000开始计算
+                    var meanMotion = 2 * Math.PI / d.orbital_period;
+                    angle = (meanMotion * daysSinceEpoch) % (2 * Math.PI);
+                }
                 
                 // 计算初始位置
                 var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
