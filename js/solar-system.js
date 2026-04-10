@@ -2,7 +2,7 @@
     var scene, camera, renderer, controls;
     var planets = [];
     var sunMesh = null;
-    var speedMultiplier = 10.0;
+    var speedMultiplier = 500.0;
     var moon = null;
     var paused = false;
     var sunPulse = 0;
@@ -386,12 +386,13 @@
     function animate() {
         requestAnimationFrame(animate);
         
-        // dt = 模拟的天数，10倍速意味着每秒模拟10天
-        // 60fps下，每帧 dt = speedMultiplier / 60 天
-        var dt = paused ? 0 : speedMultiplier / 60;
+        // 实时模式：n倍速 = 1秒真实时间 = n秒模拟时间
+        // dt_seconds = 模拟的秒数，dt_days = 模拟的天数
+        var dt_seconds = paused ? 0 : speedMultiplier / 60; // 60fps
+        var dt_days = dt_seconds / 86400;
         
-        // 更新模拟天数（dt 是模拟的天数增量）
-        simDays += dt;
+        // 更新模拟天数
+        simDays += dt_days;
         
         // 每100帧更新一次日期显示
         if(Math.floor(simDays * 10) % 10 === 0) {
@@ -401,15 +402,15 @@
         // 太阳自转（真实周期约25.4天）
         if(sunMesh){
             var sunRotationPeriod = 25.4;
-            sunMesh.rotation.y += dt / sunRotationPeriod * 2 * Math.PI;
-            sunPulse += dt * 0.5;
+            sunMesh.rotation.y += dt_days / sunRotationPeriod * 2 * Math.PI;
+            sunPulse += dt_days * 0.5;
             sunMesh.scale.setScalar(1 + Math.sin(sunPulse) * 0.02);
         }
         
         // 月球
         if(moon){
             // 月球公转周期约27.3天
-            moon.angle += dt / 27.3 * 2 * Math.PI;
+            moon.angle += dt_days / 27.3 * 2 * Math.PI;
             moon.mesh.position.x = moon.earth.mesh.position.x + Math.cos(moon.angle) * moon.dist;
             moon.mesh.position.z = moon.earth.mesh.position.z + Math.sin(moon.angle) * moon.dist;
             // 月球自转周期 = 公转周期（潮汐锁定）
@@ -418,24 +419,25 @@
         
         // 行星公转和自转
         planets.forEach(function(p){
-            // 公转：角度增量 = dt / 公转周期 * 2π
-            p.angle += dt / p.data.orbital_period * 2 * Math.PI;
+            // 公转：角度增量 = dt_days / 公转周期 * 2π
+            p.angle += dt_days / p.data.orbital_period * 2 * Math.PI;
             var r = p.a * (1 - p.e * p.e) / (1 + p.e * Math.cos(p.angle));
             var x = r * Math.cos(p.angle);
             var z = r * Math.sin(p.angle);
             p.mesh.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
             
-            // 自转：绕Y轴旋转，角度增量 = dt / 自转周期 * 2π
+            // 自转：绕Y轴旋转，角度增量 = dt_days / 自转周期 * 2π
             var rotationPeriod = p.data.rotation_period || 1;
             var rotationDir = rotationPeriod < 0 ? -1 : 1; // 金星逆向自转
-            p.mesh.rotation.y += rotationDir * dt / Math.abs(rotationPeriod) * 2 * Math.PI;
+            p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
         });
         
         // 小行星带公转
         if(asteroidBelt){
             var positions = asteroidBelt.geometry.attributes.position.array;
             for(var i = 0; i < asteroidAngles.length; i++){
-                asteroidAngles[i] += dt * 0.0002;
+                // 小行星带公转周期约 3-6 年，取平均 4.5 年 = 1642.5 天
+                asteroidAngles[i] += dt_days / 1642.5 * 2 * Math.PI;
                 var dist = Math.sqrt(positions[i*3]*positions[i*3] + positions[i*3+2]*positions[i*3+2]);
                 positions[i*3] = Math.cos(asteroidAngles[i]) * dist;
                 positions[i*3+2] = Math.sin(asteroidAngles[i]) * dist;
