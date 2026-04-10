@@ -6,6 +6,7 @@
     var moon = null;
     var paused = false;
     var flyTarget = null;
+    var trackTarget = null;  // 跟踪目标
     var sunPulse = 0;
 
     function init() {
@@ -28,6 +29,12 @@
         controls.rotateSpeed = 0.8;
         controls.minDistance = 5;
         controls.maxDistance = 800;
+        
+        // 用户开始拖动时中断飞行
+        controls.addEventListener('start', function() {
+            flyTarget = null;
+        });
+        
         scene.add(new THREE.AmbientLight(0x222244, 0.3));
         var sunLight = new THREE.PointLight(0xfff5e6, 2.5, 3000);
         sunLight.position.set(0, 0, 0);
@@ -188,11 +195,9 @@
                         e.stopPropagation();
                         var pos=m.position.clone();
                         var vd=(r||1)*4;
-                        flyTarget={pos:pos,cam:new THREE.Vector3(pos.x+vd,pos.y+vd*0.5,pos.z+vd)};
+                        flyTarget={pos:pos,cam:new THREE.Vector3(pos.x+vd,pos.y+vd*0.5,pos.z+vd),mesh:m};
                         controls.minDistance=r*2;
-                        var dd=m.userData;
-                        var pa=document.getElementById('info-panel'),pn=document.getElementById('planet-name'),pi=document.getElementById('planet-info');
-                        if(pa&&dd){pa.style.display='block';if(pn)pn.textContent=(dd.name_cn||dd.name)+' ('+dd.name+')';var h='';if(dd.distance_from_sun)h+='<div class="stat"><span class="stat-label">距太阳</span><span class="stat-value">'+dd.distance_from_sun+' AU</span></div>';if(dd.orbital_period)h+='<div class="stat"><span class="stat-label">公转周期</span><span class="stat-value">'+dd.orbital_period+' 天</span></div>';if(dd.radius)h+='<div class="stat"><span class="stat-label">半径</span><span class="stat-value">'+dd.radius.toFixed(0)+' km</span></div>';if(dd.moons!==undefined)h+='<div class="stat"><span class="stat-label">卫星</span><span class="stat-value">'+dd.moons+' 颗</span></div>';if(dd.description)h+='<p class="planet-desc">'+dd.description+'</p>';if(pi)pi.innerHTML=h;}
+                        showPlanetInfo(m.userData, m);
                     });
                 })(mesh,radius);
                 planets.push({mesh:mesh, data:d, angle:angle, dist:dist, label:label});
@@ -224,6 +229,44 @@
             document.getElementById('loading').textContent='加载失败: '+e.message;
         });
 
+        // 显示行星信息面板
+        function showPlanetInfo(d, mesh) {
+            var pa=document.getElementById('info-panel'),pn=document.getElementById('planet-name'),pi=document.getElementById('planet-info');
+            if(pa&&d){
+                pa.style.display='block';
+                if(pn)pn.textContent=(d.name_cn||d.name)+' ('+d.name+')';
+                var h='';
+                if(d.distance_from_sun)h+='<div class="stat"><span class="stat-label">距太阳</span><span class="stat-value">'+d.distance_from_sun+' AU</span></div>';
+                if(d.orbital_period)h+='<div class="stat"><span class="stat-label">公转周期</span><span class="stat-value">'+d.orbital_period+' 天</span></div>';
+                if(d.radius)h+='<div class="stat"><span class="stat-label">半径</span><span class="stat-value">'+d.radius.toFixed(0)+' km</span></div>';
+                if(d.moons!==undefined)h+='<div class="stat"><span class="stat-label">卫星</span><span class="stat-value">'+d.moons+' 颗</span></div>';
+                if(d.description)h+='<p class="planet-desc">'+d.description+'</p>';
+                // 添加跟随按钮
+                h+='<button id="track-btn" style="margin-top:12px;width:100%;padding:8px;background:rgba(96,165,250,0.2);border:1px solid rgba(96,165,250,0.5);color:#60a5fa;border-radius:6px;cursor:pointer;font-size:13px;">🎯 跟随此行星</button>';
+                if(pi)pi.innerHTML=h;
+                
+                // 绑定跟随按钮事件
+                setTimeout(function() {
+                    var tb = document.getElementById('track-btn');
+                    if(tb) {
+                        tb.addEventListener('click', function() {
+                            if(trackTarget === mesh) {
+                                trackTarget = null;
+                                tb.textContent = '🎯 跟随此行星';
+                                tb.style.background = 'rgba(96,165,250,0.2)';
+                            } else {
+                                trackTarget = mesh;
+                                tb.textContent = '✕ 取消跟随';
+                                tb.style.background = 'rgba(250,100,100,0.3)';
+                                tb.style.borderColor = 'rgba(250,100,100,0.5)';
+                                tb.style.color = '#ff9999';
+                            }
+                        });
+                    }
+                }, 0);
+            }
+        }
+
         var sl=document.getElementById('speed-control'),sv=document.getElementById('speed-value');
         if(sl){sl.addEventListener('input',function(){speedMultiplier=parseFloat(this.value);if(sv)sv.textContent=speedMultiplier.toFixed(0)+'x';});}
         var pb=document.getElementById('pause-btn');
@@ -233,8 +276,23 @@
             if(e.code==='Space'){e.preventDefault();paused=!paused;if(pb)pb.textContent=paused?'▶ 继续':'⏸ 暂停';}
             if(e.code==='ArrowUp'){speedMultiplier=Math.min(speedMultiplier+5,200);if(sl)sl.value=speedMultiplier;if(sv)sv.textContent=speedMultiplier.toFixed(0)+'x';}
             if(e.code==='ArrowDown'){speedMultiplier=Math.max(speedMultiplier-5,1);if(sl)sl.value=speedMultiplier;if(sv)sv.textContent=speedMultiplier.toFixed(0)+'x';}
-            if(e.code==='KeyR'){camera.position.set(0,120,200);controls.target.set(0,0,0);controls.minDistance=5;controls.maxDistance=800;flyTarget=null;}
-            if(e.code==='KeyM'){window._measureFrom=hits.length>0?hits[0].object:null;window._measureName=hits.length>0?(hits[0].object.userData.name_cn||hits[0].object.userData.name):'';}
+            if(e.code==='KeyR'){
+                camera.position.set(0,120,200);
+                controls.target.set(0,0,0);
+                controls.minDistance=5;
+                controls.maxDistance=800;
+                flyTarget=null;
+                trackTarget=null;
+                document.getElementById('info-panel').style.display='none';
+            }
+            if(e.code==='Escape'){
+                trackTarget = null;
+                var tb = document.getElementById('track-btn');
+                if(tb) {
+                    tb.textContent = '🎯 跟随此行星';
+                    tb.style.background = 'rgba(96,165,250,0.2)';
+                }
+            }
         });
 
         renderer.domElement.addEventListener('click',function(e){
@@ -251,30 +309,23 @@
                     var baseR=clickObj.geometry.parameters.radius||1;
                     var curDist=camera.position.distanceTo(pos);
                     var vd=baseR*4;
-                    flyTarget={pos:pos, cam:new THREE.Vector3(pos.x+vd,pos.y+vd*0.5,pos.z+vd)};
+                    flyTarget={pos:pos, cam:new THREE.Vector3(pos.x+vd,pos.y+vd*0.5,pos.z+vd), mesh:clickObj};
                     controls.minDistance=baseR*2;
                     controls.maxDistance=Math.max(800, curDist*2);
                 }
-                var pa=document.getElementById('info-panel'),pn=document.getElementById('planet-name'),pi=document.getElementById('planet-info');
-                if(pa&&d){
-                    pa.style.display='block';
-                    if(pn)pn.textContent=(d.name_cn||d.name)+' ('+d.name+')';
-                    var h='';
-                    if(d.distance_from_sun)h+='<div class="stat"><span class="stat-label">距太阳</span><span class="stat-value">'+d.distance_from_sun+' AU</span></div>';
-                    if(d.orbital_period)h+='<div class="stat"><span class="stat-label">公转周期</span><span class="stat-value">'+d.orbital_period+' 天</span></div>';
-                    if(d.radius)h+='<div class="stat"><span class="stat-label">半径</span><span class="stat-value">'+d.radius.toFixed(0)+' km</span></div>';
-                    if(d.moons!==undefined)h+='<div class="stat"><span class="stat-label">卫星</span><span class="stat-value">'+d.moons+' 颗</span></div>';
-                    if(d.description)h+='<p class="planet-desc">'+d.description+'</p>';
-                    if(pi)pi.innerHTML=h;
-                    if(window._measureFrom&&clickObj!==sunMesh){
-                        var f=window._measureFrom.position;
-                        var t=clickObj.position;
-                        var dist=f.distanceTo(t);
-                        var auDist=(dist/30).toFixed(2);
+                showPlanetInfo(d, clickObj);
+                if(window._measureFrom&&clickObj!==sunMesh){
+                    var f=window._measureFrom.position;
+                    var t=clickObj.position;
+                    var dist=f.distanceTo(t);
+                    var auDist=(dist/30).toFixed(2);
+                    var pi=document.getElementById('planet-info');
+                    if(pi){
+                        var h=pi.innerHTML;
                         h+='<div class="stat" style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.2);padding-top:8px;"><span class="stat-label">距离 '+window._measureName+'</span><span class="stat-value">'+auDist+' AU ('+dist.toFixed(1)+' 单位)</span></div>';
-                        if(pi)pi.innerHTML=h;
-                        window._measureFrom=null;window._measureName='';
+                        pi.innerHTML=h;
                     }
+                    window._measureFrom=null;window._measureName='';
                 }
             }
         });
@@ -311,10 +362,21 @@
         });
         
         // 渐进飞行
-        if(flyTarget){
+        if(flyTarget && flyTarget.mesh){
+            var targetPos = flyTarget.mesh.position.clone();
+            flyTarget.cam.x = targetPos.x + (flyTarget.cam.x - flyTarget.pos.x);
+            flyTarget.cam.z = targetPos.z + (flyTarget.cam.z - flyTarget.pos.z);
+            flyTarget.pos = targetPos;
             camera.position.lerp(flyTarget.cam,0.06);
             controls.target.lerp(flyTarget.pos,0.06);
-            if(camera.position.distanceTo(flyTarget.cam)<0.3){flyTarget=null;}
+            if(camera.position.distanceTo(flyTarget.cam)<0.3){
+                flyTarget=null;
+            }
+        }
+        
+        // 跟踪模式：持续跟随行星
+        if(trackTarget && !flyTarget){
+            controls.target.copy(trackTarget.position);
         }
         
         // 更新标签位置
