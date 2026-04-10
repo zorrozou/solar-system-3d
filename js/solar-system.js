@@ -2,16 +2,20 @@
     var scene, camera, renderer, controls;
     var planets = [];
     var sunMesh = null;
-    var speedMultiplier = 300000.0;
+    var speedMultiplier = 1.0;
     var moon = null;
     var paused = false;
     var sunPulse = 0;
     var asteroidBelt = null;
     var asteroidAngles = [];
     
-    // 模拟时间（从今天开始）
+    // 模拟时间（从今天开始，包含具体时间）
     var simDate = new Date();
     var simDays = 0; // 模拟经过的天数
+    var simSeconds = 0; // 模拟经过的秒数
+    
+    // 当前时间的小时分数（用于地球自转初始角度）
+    var initialHourFraction = (simDate.getHours() * 3600 + simDate.getMinutes() * 60 + simDate.getSeconds()) / 86400;
     
     // 视角系统
     var trackTarget = null;
@@ -160,6 +164,14 @@
                 // 简化：用平均近点角作为真近点角（忽略偏心率带来的差异）
                 var angle = meanAnomaly;
                 
+                // 地球特殊处理：根据当前时间设置初始自转角度
+                var initialRotation = 0;
+                if(d.name === 'Earth'){
+                    // 地球自转角度：0点时，某个经线正对太阳方向
+                    // 当前时间的小时分数 * 2π = 自转角度
+                    initialRotation = initialHourFraction * 2 * Math.PI;
+                }
+                
                 // 纹理
                 var texture = null;
                 try { texture = texLoader.load('/solar-system/textures/planets/' + d.name + '.jpg'); } catch(err) {}
@@ -267,7 +279,8 @@
                     e: e, 
                     inclination: inclination,
                     label: label,
-                    axialTilt: axialTilt
+                    axialTilt: axialTilt,
+                    initialRotation: initialRotation
                 });
             });
             
@@ -496,7 +509,8 @@
             // 自转：绕Y轴旋转，只用 mesh
             var rotationPeriod = p.data.rotation_period || 1;
             var rotationDir = rotationPeriod < 0 ? -1 : 1; // 金星逆向自转
-            p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
+            // 加上初始自转角度（地球根据当前时间）
+            p.mesh.rotation.y = (p.initialRotation || 0) + rotationDir * simSeconds / 86400 / Math.abs(rotationPeriod) * 2 * Math.PI;
         });
         
         // 小行星带公转
