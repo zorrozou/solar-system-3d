@@ -183,52 +183,6 @@
                 var x0 = r0 * Math.cos(angle);
                 var z0 = r0 * Math.sin(angle);
                 
-                // 地球特殊处理：添加北京标记点
-                if(d.name === 'Earth'){
-                    // 北京：东经116度，北纬40度
-                    var beijingLon = 116 * Math.PI / 180;
-                    var beijingLat = 40 * Math.PI / 180;
-                    
-                    // 计算北京在球面上的位置
-                    var markerRadius = radius * 1.01;
-                    var markerX = markerRadius * Math.cos(beijingLat) * Math.sin(beijingLon);
-                    var markerY = markerRadius * Math.sin(beijingLat);
-                    var markerZ = markerRadius * Math.cos(beijingLat) * Math.cos(beijingLon);
-                    
-                    var beijingMarker = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.15, 8, 8),
-                        new THREE.MeshBasicMaterial({color: 0xff0000})
-                    );
-                    beijingMarker.position.set(markerX, markerY, markerZ);
-                    mesh.add(beijingMarker);
-                    console.log('Beijing marker added at:', markerX.toFixed(2), markerY.toFixed(2), markerZ.toFixed(2));
-                }
-                
-                // 地球特殊处理：根据当前时间设置初始自转角度
-                var initialRotation = 0;
-                if(d.name === 'Earth'){
-                    // 北京时间 22:48 = 晚上，中国应该背对太阳
-                    var beijingHour = (simDate.getUTCHours() + 8 + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600) % 24;
-                    
-                    // 地球朝向太阳的角度
-                    var toSun = Math.atan2(-x0, -z0);
-                    
-                    // 计算逻辑：
-                    // 北京时间12:00，中国正对太阳，经线120°朝向太阳
-                    // 北京时间22:48，中国已经转过约10.8小时 = 162度
-                    // 中国现在应该背对太阳（晚上）
-                    // 
-                    // 自转角度 = 让中国经线在正确位置
-                    // 北京时间每过1小时，地球自转15度
-                    // 从正午开始计算：(beijingHour - 12) * 15度
-                    var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
-                    
-                    // 地球朝向太阳的角度 + 让中国经线在正确位置的偏移
-                    initialRotation = toSun + rotationFromNoon;
-                    
-                    console.log('Earth rotation - Beijing:', beijingHour.toFixed(2), 'toSun:', (toSun*180/Math.PI).toFixed(1), 'rotation:', (rotationFromNoon*180/Math.PI).toFixed(1), 'initialRotation:', (initialRotation*180/Math.PI).toFixed(1));
-                }
-                
                 // 纹理
                 var texture = null;
                 try { texture = texLoader.load('/solar-system/textures/planets/' + d.name + '.jpg'); } catch(err) {}
@@ -279,6 +233,27 @@
                 mesh.userData = d;
                 scene.add(pivot);
                 
+                // 地球特殊处理：添加北京标记点
+                if(d.name === 'Earth'){
+                    // 北京：东经116度，北纬40度
+                    var beijingLon = 116 * Math.PI / 180;
+                    var beijingLat = 40 * Math.PI / 180;
+                    
+                    // 计算北京在球面上的位置
+                    var markerRadius = radius * 1.01;
+                    var markerX = markerRadius * Math.cos(beijingLat) * Math.sin(beijingLon);
+                    var markerY = markerRadius * Math.sin(beijingLat);
+                    var markerZ = markerRadius * Math.cos(beijingLat) * Math.cos(beijingLon);
+                    
+                    var beijingMarker = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.15, 8, 8),
+                        new THREE.MeshBasicMaterial({color: 0xff0000})
+                    );
+                    beijingMarker.position.set(markerX, markerY, markerZ);
+                    mesh.add(beijingMarker);
+                    console.log('Beijing marker added');
+                }
+                
                 // 土星环（跟球体一起自转）
                 if(d.name === 'Saturn'){
                     var ring = new THREE.Mesh(
@@ -296,6 +271,17 @@
                     );
                     uRing.rotation.x = Math.PI / 2;
                     mesh.add(uRing);
+                }
+                
+                // 地球自转初始化：根据当前时间设置初始角度
+                var initialRotation = 0;
+                if(d.name === 'Earth'){
+                    var beijingHour = (simDate.getUTCHours() + 8 + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600) % 24;
+                    var toSun = Math.atan2(-x0, -z0);
+                    var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
+                    initialRotation = toSun + rotationFromNoon;
+                    mesh.rotation.y = initialRotation;
+                    console.log('Earth: Beijing', beijingHour.toFixed(1), 'rotation:', (initialRotation*180/Math.PI).toFixed(1) + '°');
                 }
                 
                 // 椭圆轨道线
@@ -335,8 +321,7 @@
                     e: e, 
                     inclination: inclination,
                     label: label,
-                    axialTilt: axialTilt,
-                    initialRotation: initialRotation
+                    axialTilt: axialTilt
                 });
             });
             
@@ -566,8 +551,7 @@
             // 自转：绕Y轴旋转，只用 mesh
             var rotationPeriod = p.data.rotation_period || 1;
             var rotationDir = rotationPeriod < 0 ? -1 : 1; // 金星逆向自转
-            // 加上初始自转角度（地球根据当前时间）
-            p.mesh.rotation.y = (p.initialRotation || 0) + rotationDir * simSeconds / 86400 / Math.abs(rotationPeriod) * 2 * Math.PI;
+            p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
         });
         
         // 小行星带公转
