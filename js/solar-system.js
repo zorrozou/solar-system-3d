@@ -282,19 +282,10 @@
             if(e.code==='Escape'){ stopTrack(); }
         });
 
-        // 点击行星/空白
+        // 点击空白退出跟踪
         renderer.domElement.addEventListener('click',function(e){
-            var msv=new THREE.Vector2((e.clientX/window.innerWidth)*2-1,-(e.clientY/window.innerHeight)*2+1);
-            var rc=new THREE.Raycaster();rc.setFromCamera(msv,camera);
-            var tg=planets.map(function(p){return p.mesh;});tg.push(sunMesh);if(moon)tg.push(moon.mesh);
-            var hits=rc.intersectObjects(tg,true);
-            
-            if(hits.length>0){
-                var clickObj=hits[0].object;
-                while(clickObj.parent&&!clickObj.userData.name){clickObj=clickObj.parent;}
-                var baseR = clickObj.geometry.parameters.radius || 1;
-                startTrack(clickObj, baseR);
-            } else {
+            // 不再检测行星点击，只点空白退出
+            if(trackTarget){
                 stopTrack();
             }
         });
