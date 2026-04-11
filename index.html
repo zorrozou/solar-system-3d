@@ -14,16 +14,25 @@
         #canvas-container { width: 100vw; height: 100vh; cursor: grab; }
         #canvas-container:active { cursor: grabbing; }
         
-        .toolbar { position: fixed; top: 12px; left: 12px; z-index: 20; }
+        .toolbar { position: fixed; top: 12px; left: 12px; z-index: 20; display: flex; gap: 8px; }
         .toolbar-btn { padding: 8px 14px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 18px; color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; cursor: pointer; }
         .toolbar-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .toolbar-btn.active { background: rgba(96,165,250,0.3); color: #60a5fa; border-color: #60a5fa; }
         
-        #controls { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.85); padding: 10px 20px; border-radius: 24px; display: flex; align-items: center; gap: 12px; z-index: 10; flex-wrap: wrap; justify-content: center; }
-        #controls label { font-size: 12px; color: rgba(255,255,255,0.6); }
-        #speed-control { width: 120px; height: 4px; -webkit-appearance: none; background: rgba(255,255,255,0.15); outline: none; border-radius: 2px; }
-        #speed-control::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #60a5fa; cursor: pointer; }
-        #speed-value { min-width: 40px; text-align: center; font-weight: 600; color: #60a5fa; font-size: 13px; }
-        #pause-btn { padding: 6px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        /* 时间显示面板 */
+        #time-panel { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.85); border-radius: 16px; padding: 10px 20px; z-index: 20; text-align: center; }
+        #sim-time { font-size: 18px; font-weight: 600; color: #60a5fa; margin-bottom: 4px; }
+        #sim-date { font-size: 13px; color: rgba(255,255,255,0.6); }
+        
+        /* 时间调整面板 */
+        #time-adjust { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.85); border-radius: 12px; padding: 12px 16px; z-index: 20; display: none; flex-direction: column; gap: 10px; }
+        #time-adjust.show { display: flex; }
+        .time-row { display: flex; align-items: center; gap: 8px; justify-content: center; }
+        .time-row label { color: rgba(255,255,255,0.6); font-size: 12px; min-width: 40px; }
+        .time-row input { width: 60px; padding: 4px 8px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; background: rgba(0,0,0,0.3); color: #fff; font-size: 14px; text-align: center; }
+        .time-row input:focus { outline: none; border-color: #60a5fa; }
+        #apply-time { padding: 6px 16px; background: #60a5fa; border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; margin-top: 8px; }
+        #apply-time:hover { background: #3b82f6; }
         
         #info-panel { position: fixed; top: 12px; right: 12px; background: rgba(8,10,20,0.92); padding: 18px; border-radius: 14px; width: 280px; max-width: calc(100vw - 24px); max-height: calc(100vh - 80px); overflow-y: auto; display: none; z-index: 10; }
         #planet-name { font-size: 18px; font-weight: 600; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
@@ -35,39 +44,64 @@
         .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 16px; color: rgba(255,255,255,0.5); z-index: 100; }
         .loading.error { color: #ff6b6b; }
         
-        .hint { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 11px; z-index: 10; pointer-events: none; text-align: center; }
-        
-        #time-display { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.7); border-radius: 16px; padding: 6px 14px; font-size: 12px; color: rgba(255,255,255,0.6); z-index: 20; }
-        #sim-date { color: #60a5fa; font-weight: 600; }
+        .hint { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 11px; z-index: 10; pointer-events: none; text-align: center; }
         
         .planet-label { pointer-events: auto; }
+        
+        /* 控制面板 - 固定档位 */
+        #controls { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.85); padding: 12px 20px; border-radius: 24px; z-index: 10; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .speed-btn { padding: 6px 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.7); border-radius: 6px; cursor: pointer; font-size: 11px; transition: all 0.2s; }
+        .speed-btn:hover { background: rgba(255,255,255,0.2); }
+        .speed-btn.active { background: rgba(96,165,250,0.3); color: #60a5fa; border-color: #60a5fa; }
+        #pause-btn { padding: 6px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 6px; cursor: pointer; font-size: 12px; margin-left: 8px; }
+        #pause-btn:hover { background: rgba(255,255,255,0.2); }
         
         .key-hints { position: fixed; bottom: 8px; left: 8px; color: rgba(255,255,255,0.3); font-size: 10px; z-index: 5; line-height: 1.5; }
         
         /* 移动端适配 */
         @media (max-width: 600px) {
-            #speed-control { width: 100px; }
-            #info-panel { width: calc(100vw - 20px); left: 10px; right: 10px; top: auto; bottom: 80px; padding: 14px; max-height: 40vh; }
+            #time-panel { top: 8px; padding: 8px 14px; }
+            #sim-time { font-size: 16px; }
+            #sim-date { font-size: 11px; }
+            #info-panel { width: calc(100vw - 20px); left: 10px; right: 10px; top: auto; bottom: 100px; padding: 14px; max-height: 40vh; }
             .toolbar { top: 8px; left: 8px; }
-            .toolbar-btn { padding: 6px 12px; font-size: 12px; }
-            #time-display { top: 8px; font-size: 11px; padding: 5px 12px; }
-            #controls { bottom: 12px; padding: 8px 14px; gap: 8px; }
-            .hint { bottom: 55px; font-size: 10px; }
+            .toolbar-btn { padding: 6px 10px; font-size: 11px; }
+            #controls { bottom: 12px; padding: 10px 14px; gap: 6px; }
+            .speed-btn { padding: 5px 8px; font-size: 10px; }
+            .hint { bottom: 65px; font-size: 10px; }
             .key-hints { display: none; }
         }
         
         @media (max-width: 400px) {
-            #controls { flex-direction: column; gap: 6px; padding: 8px 12px; }
-            #speed-control { width: 140px; }
+            #controls { flex-direction: row; gap: 4px; padding: 8px 10px; }
+            .speed-btn { padding: 4px 6px; font-size: 9px; }
         }
     </style>
 </head>
 <body>
-    <a href="/" class="toolbar-btn">← 返回</a>
+    <div class="toolbar">
+        <a href="/" class="toolbar-btn">← 返回</a>
+        <button id="adjust-btn" class="toolbar-btn">📅 调整时间</button>
+        <button id="reset-btn" class="toolbar-btn">🔄 当前时间</button>
+    </div>
 
-    <div id="time-display">
-        <span>模拟时间</span>
-        <span id="sim-date">2024-01-01</span>
+    <div id="time-panel">
+        <div id="sim-time">00:00:00</div>
+        <div id="sim-date">2026-01-01</div>
+    </div>
+
+    <div id="time-adjust">
+        <div class="time-row">
+            <label>年</label><input type="number" id="year-input" min="2000" max="2100">
+            <label>月</label><input type="number" id="month-input" min="1" max="12">
+            <label>日</label><input type="number" id="day-input" min="1" max="31">
+        </div>
+        <div class="time-row">
+            <label>时</label><input type="number" id="hour-input" min="0" max="23">
+            <label>分</label><input type="number" id="minute-input" min="0" max="59">
+            <label>秒</label><input type="number" id="second-input" min="0" max="59">
+        </div>
+        <button id="apply-time">应用时间</button>
     </div>
 
     <div id="canvas-container"></div>
@@ -78,21 +112,28 @@
         <div id="planet-info"></div>
     </div>
 
-    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放</div>
+    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放 · 空格暂停</div>
 
     <div id="controls">
-        <label>速度</label>
-        <input type="range" id="speed-control" min="1" max="1000000" value="1">
-        <span id="speed-value">1x</span>
+        <button class="speed-btn active" data-speed="1">1秒=1秒</button>
+        <button class="speed-btn" data-speed="60">1秒=1分</button>
+        <button class="speed-btn" data-speed="600">1秒=10分</button>
+        <button class="speed-btn" data-speed="3600">1秒=1时</button>
+        <button class="speed-btn" data-speed="21600">1秒=6时</button>
+        <button class="speed-btn" data-speed="86400">1秒=1天</button>
+        <button class="speed-btn" data-speed="604800">1秒=1周</button>
+        <button class="speed-btn" data-speed="2592000">1秒=1月</button>
+        <button class="speed-btn" data-speed="7776000">1秒=1季</button>
+        <button class="speed-btn" data-speed="31536000">1秒=1年</button>
         <button id="pause-btn">⏸ 暂停</button>
     </div>
 
     <div class="key-hints">
-        空格:暂停 | ↑↓:加速减速 | R:重置 | ESC:退出跟踪
+        空格:暂停 | +/-:切换档位 | R:当前时间 | ESC:退出跟踪
     </div>
 
     <script src="lib/three.min.js"></script>
     <script src="lib/OrbitControls.js"></script>
-    <script src="js/solar-system.js?v=1.0.0"></script>
+    <script src="js/solar-system.js?v=2.0.0"></script>
 </body>
 </html>

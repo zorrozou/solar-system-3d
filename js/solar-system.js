@@ -2,20 +2,21 @@
     var scene, camera, renderer, controls;
     var planets = [];
     var sunMesh = null;
-    var speedMultiplier = 1.0;
+    var speedMultiplier = 1;  // 速率倍数（模拟秒/真实秒）
     var moon = null;
     var paused = false;
     var sunPulse = 0;
     var asteroidBelt = null;
     var asteroidAngles = [];
     
-    // 模拟时间（从今天开始，包含具体时间）
-    var simDate = new Date();
-    var simDays = 0; // 模拟经过的天数
-    var simSeconds = 0; // 模拟经过的秒数
+    // 精确的模拟时间（毫秒级）
+    var simTime = Date.now();  // 模拟时间的毫秒时间戳
+    var lastRealTime = Date.now();  // 上一次真实时间
     
-    // 当前时间的小时分数（用于地球自转初始角度）
-    var initialHourFraction = (simDate.getHours() * 3600 + simDate.getMinutes() * 60 + simDate.getSeconds()) / 86400;
+    // 当前速度档位
+    var currentSpeedIndex = 0;
+    var speedLevels = [1, 60, 600, 3600, 21600, 86400, 604800, 2592000, 7776000, 31536000];
+    var speedLabels = ['1秒=1秒', '1秒=1分', '1秒=10分', '1秒=1时', '1秒=6时', '1秒=1天', '1秒=1周', '1秒=1月', '1秒=1季', '1秒=1年'];
     
     // 视角系统
     var trackTarget = null;
@@ -28,9 +29,93 @@
 
     // 计算从J2000.0到指定日期的天数
     function daysSinceJ2000(date) {
-        // J2000.0 = 2000-01-01 12:00 UTC
-        var j2000 = new Date(Date.UTC(2000, 0, 1, 12, 0, 0));
-        return (date.getTime() - j2000.getTime()) / (1000 * 60 * 60 * 24);
+        var j2000 = Date.UTC(2000, 0, 1, 12, 0, 0);
+        return (date - j2000) / (1000 * 60 * 60 * 24);
+    }
+
+    // 格式化时间显示
+    function formatDateTime(timestamp) {
+        var d = new Date(timestamp);
+        var year = d.getFullYear();
+        var month = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        var hour = String(d.getHours()).padStart(2, '0');
+        var minute = String(d.getMinutes()).padStart(2, '0');
+        var second = String(d.getSeconds()).padStart(2, '0');
+        return {
+            date: year + '-' + month + '-' + day,
+            time: hour + ':' + minute + ':' + second
+        };
+    }
+
+    // 更新时间显示
+    function updateTimeDisplay() {
+        var formatted = formatDateTime(simTime);
+        var timeEl = document.getElementById('sim-time');
+        var dateEl = document.getElementById('sim-date');
+        if(timeEl) timeEl.textContent = formatted.time;
+        if(dateEl) dateEl.textContent = formatted.date;
+    }
+
+    // 根据时间重新计算所有行星位置
+    function updatePlanetsPosition(date) {
+        var daysSinceEpoch = daysSinceJ2000(date);
+        
+        planets.forEach(function(p) {
+            var d = p.data;
+            var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180;
+            var omega = (d.perihelion_longitude || 0) * Math.PI / 180;
+            var meanMotion = 2 * Math.PI / d.orbital_period;
+            var e = p.e;
+            
+            // 计算平均近点角
+            var M = M0 + meanMotion * daysSinceEpoch;
+            
+            // 解开普勒方程
+            var E = M;
+            for(var iter = 0; iter < 10; iter++){
+                var dE = (M - E + e * Math.sin(E)) / (1 - e * Math.cos(E));
+                E += dE;
+                if(Math.abs(dE) < 1e-8) break;
+            }
+            
+            // 真近点角
+            var nu = 2 * Math.atan2(
+                Math.sqrt(1 + e) * Math.sin(E / 2),
+                Math.sqrt(1 - e) * Math.cos(E / 2)
+            );
+            
+            // 黄道经度
+            p.angle = (omega + nu) % (2 * Math.PI);
+            
+            // 更新位置
+            var r = p.a * (1 - e * e) / (1 + e * Math.cos(p.angle));
+            var x = r * Math.cos(p.angle);
+            var z = r * Math.sin(p.angle);
+            p.pivot.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
+            
+            // 更新地球自转
+            if(d.name === 'Earth') {
+                var d2 = new Date(date);
+                var beijingHour = (d2.getUTCHours() + 8 + d2.getUTCMinutes()/60 + d2.getUTCSeconds()/3600) % 24;
+                var toSun = Math.atan2(-x, -z);
+                var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
+                var beijingTheta = 206 * Math.PI / 180;
+                p.mesh.rotation.y = toSun + rotationFromNoon - beijingTheta;
+            }
+        });
+        
+        // 更新月球位置
+        if(moon) {
+            var newMoonRef = Date.UTC(2000, 0, 6, 18, 14, 0);
+            var daysSinceNew = (date - newMoonRef) / (1000 * 60 * 60 * 24);
+            var synodicMonth = 29.530588;
+            var moonPhase = (daysSinceNew % synodicMonth) / synodicMonth;
+            
+            var earthAngle = planets.find(function(p){ return p.data.name === 'Earth'; }).angle;
+            var sunLongitude = earthAngle + Math.PI;
+            moon.angle = sunLongitude + moonPhase * 2 * Math.PI;
+        }
     }
 
     function init() {
@@ -39,8 +124,8 @@
             document.getElementById('loading').textContent = 'THREE 未定义'; return;
         }
         
-        // 初始化模拟时间显示
-        updateSimDateDisplay();
+        // 初始化时间显示
+        updateTimeDisplay();
         
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 20000);
@@ -144,14 +229,9 @@
 
         var texLoader = new THREE.TextureLoader();
         
-        // 计算当前日期相对于J2000的天数
-        var daysSinceEpoch = daysSinceJ2000(simDate);
-        
-        // 春分参考点：2026年春分大约在3月20日
-        // 计算从春分点的天数（简化：取整年）
-        var currentYear = simDate.getFullYear();
-        var springEquinox = new Date(currentYear, 2, 20); // 3月20日
-        var daysSinceSpringEquinox = (simDate.getTime() - springEquinox.getTime()) / (1000 * 60 * 60 * 24);
+        // 当前日期
+        var currentDate = new Date(simTime);
+        var daysSinceEpoch = daysSinceJ2000(currentDate);
 
         // 加载行星数据
         fetch('/solar-system/api/planets.php').then(function(r){return r.json();}).then(function(data){
@@ -159,36 +239,29 @@
                 // 轨道参数
                 var a = d.distance_from_sun * 30 + 10;
                 var e = (d.eccentricity || 0) * 0.3;
-                var b = a * Math.sqrt(1 - e * e);
                 var inclination = (d.orbital_inclination || 0) * 0.3 * Math.PI / 180;
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
                 
-                // 根据当前日期计算初始角度
-                // 使用开普勒方程求解真近点角
+                // 计算初始角度（开普勒方程）
                 var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180;
                 var omega = (d.perihelion_longitude || 0) * Math.PI / 180;
                 var meanMotion = 2 * Math.PI / d.orbital_period;
-                var M = M0 + meanMotion * daysSinceEpoch;  // 平均近点角
+                var M = M0 + meanMotion * daysSinceEpoch;
                 
-                // 解开普勒方程: M = E - e*sin(E)
-                // 牛顿迭代法
-                var E = M;  // 初始猜测
+                var E = M;
                 for(var iter = 0; iter < 10; iter++){
                     var dE = (M - E + e * Math.sin(E)) / (1 - e * Math.cos(E));
                     E += dE;
                     if(Math.abs(dE) < 1e-8) break;
                 }
                 
-                // 真近点角: tan(ν/2) = sqrt((1+e)/(1-e)) * tan(E/2)
                 var nu = 2 * Math.atan2(
                     Math.sqrt(1 + e) * Math.sin(E / 2),
                     Math.sqrt(1 - e) * Math.cos(E / 2)
                 );
                 
-                // 黄道经度 = 近日点经度 + 真近点角
                 var angle = (omega + nu) % (2 * Math.PI);
                 
-                // 计算初始位置
                 var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
                 var x0 = r0 * Math.cos(angle);
                 var z0 = r0 * Math.sin(angle);
@@ -201,27 +274,20 @@
                     ? new THREE.MeshPhongMaterial({map: texture, shininess: 15})
                     : new THREE.MeshPhongMaterial({color: d.color || 0x888888, shininess: 15});
                 
-                // 用容器分离轴倾角和自转
-                var pivot = new THREE.Object3D(); // 容器：处理轴倾角
-                var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat); // 球体：处理自转
+                var pivot = new THREE.Object3D();
+                var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat);
                 
-                // 轴倾角：地球自转轴在空间中指向固定方向（北极星）
-                // 轴倾角绕X轴旋转，让北极轴在YZ平面倾斜
-                // 这样：春分时北极侧向太阳，夏至时北极倾向太阳，冬至时北极背离太阳
                 var axialTilt = (d.axial_tilt || 0) * Math.PI / 180;
-                pivot.rotation.x = -axialTilt; // 注意：负号让北极轴在夏至时倾向太阳
+                pivot.rotation.x = -axialTilt;
                 pivot.add(mesh);
                 
-                // 自转轴指示器（放在容器下，不跟着球体自转）
-                // 自转轴 = 行星围绕旋转的轴，穿过南北极
+                // 自转轴指示器
                 var axisLength = radius * 2.5;
                 var axisGeometry = new THREE.CylinderGeometry(0.015, 0.015, axisLength * 2, 8);
                 var axisMaterial = new THREE.MeshBasicMaterial({color: 0x00ff88, transparent: true, opacity: 0.6});
                 var axisMesh = new THREE.Mesh(axisGeometry, axisMaterial);
-                // 圆柱默认沿Y轴，在pivot坐标系下Y轴就是自转轴方向
                 pivot.add(axisMesh);
                 
-                // 北极标记（绿色）
                 var northPole = new THREE.Mesh(
                     new THREE.SphereGeometry(0.12, 8, 8),
                     new THREE.MeshBasicMaterial({color: 0x00ff00})
@@ -229,7 +295,6 @@
                 northPole.position.y = axisLength;
                 axisMesh.add(northPole);
                 
-                // 南极标记（红色）
                 var southPole = new THREE.Mesh(
                     new THREE.SphereGeometry(0.1, 8, 8),
                     new THREE.MeshBasicMaterial({color: 0xff0000})
@@ -237,15 +302,12 @@
                 southPole.position.y = -axisLength;
                 axisMesh.add(southPole);
                 
-                // 设置位置
                 pivot.position.set(x0, z0 * Math.sin(inclination), z0 * Math.cos(inclination));
                 
                 mesh.userData = d;
                 scene.add(pivot);
                 
-                // 北京标记已校准：theta=206° 对应东经116°（红点已移除）
-
-                // 土星环（跟球体一起自转）
+                // 土星环、天王星环
                 if(d.name === 'Saturn'){
                     var ring = new THREE.Mesh(
                         new THREE.RingGeometry(radius*1.3, radius*2.2, 64),
@@ -254,7 +316,6 @@
                     ring.rotation.x = Math.PI / 2;
                     mesh.add(ring);
                 }
-                // 天王星环
                 if(d.name === 'Uranus'){
                     var uRing = new THREE.Mesh(
                         new THREE.RingGeometry(radius*1.4, radius*1.7, 32),
@@ -264,21 +325,13 @@
                     mesh.add(uRing);
                 }
                 
-                // 地球自转初始化：根据当前时间设置初始角度
-                var initialRotation = 0;
+                // 地球自转初始化
                 if(d.name === 'Earth'){
-                    var beijingHour = (simDate.getUTCHours() + 8 + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600) % 24;
+                    var beijingHour = (currentDate.getUTCHours() + 8 + currentDate.getUTCMinutes()/60 + currentDate.getUTCSeconds()/3600) % 24;
                     var toSun = Math.atan2(-x0, -z0);
                     var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
-                    // 北京标记theta=165°，需要让北京正对太阳
-                    // 正午时：beijingTheta + R = toSun
-                    // 当前时间：beijingTheta + R = toSun + rotationFromNoon
-                    // 所以：R = toSun + rotationFromNoon - beijingTheta
                     var beijingTheta = 206 * Math.PI / 180;
-                    initialRotation = toSun + rotationFromNoon - beijingTheta;
-                    mesh.rotation.y = initialRotation;
-                    
-                    console.log('Earth: Beijing', beijingHour.toFixed(1), 'h, toSun', (toSun*180/Math.PI).toFixed(1) + '°, rotation:', (initialRotation*180/Math.PI).toFixed(1) + '°');
+                    mesh.rotation.y = toSun + rotationFromNoon - beijingTheta;
                 }
                 
                 // 椭圆轨道线
@@ -286,9 +339,9 @@
                 for(var i = 0; i <= 128; i++){
                     var theta = i / 128 * Math.PI * 2;
                     var rOrbit = a * (1 - e * e) / (1 + e * Math.cos(theta));
-                    var x = rOrbit * Math.cos(theta);
-                    var z = rOrbit * Math.sin(theta);
-                    oPts.push(new THREE.Vector3(x, z * Math.sin(inclination), z * Math.cos(inclination)));
+                    var ox = rOrbit * Math.cos(theta);
+                    var oz = rOrbit * Math.sin(theta);
+                    oPts.push(new THREE.Vector3(ox, oz * Math.sin(inclination), oz * Math.cos(inclination)));
                 }
                 scene.add(new THREE.Line(
                     new THREE.BufferGeometry().setFromPoints(oPts),
@@ -322,7 +375,7 @@
                 });
             });
             
-            // 月球：根据当前日期计算初始位置
+            // 月球
             var eP = planets.find(function(p){ return p.data.name === 'Earth'; });
             if(eP){
                 var mMesh = new THREE.Mesh(
@@ -331,22 +384,14 @@
                 );
                 scene.add(mMesh);
                 
-                // 计算月球初始角度
-                // 新月参考点: 2000-01-06 18:14 UTC
-                var newMoonRef = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
-                var daysSinceNew = (simDate.getTime() - newMoonRef.getTime()) / (1000 * 60 * 60 * 24);
+                var newMoonRef = Date.UTC(2000, 0, 6, 18, 14, 0);
+                var daysSinceNew = (simTime - newMoonRef) / (1000 * 60 * 60 * 24);
                 var synodicMonth = 29.530588;
-                var moonPhase = (daysSinceNew % synodicMonth) / synodicMonth;  // 0=新月, 0.5=满月
-                
-                // 月球黄道经度 = 太阳黄道经度 + 月相角
-                // 太阳黄道经度 = 地球黄道经度 + 180°
-                var earthAngle = eP.angle;  // 地球黄道经度
-                var sunLongitude = earthAngle + Math.PI;  // 太阳黄道经度
-                var phaseAngle = moonPhase * 2 * Math.PI;  // 月相角（从太阳向东）
-                var moonInitAngle = sunLongitude + phaseAngle;  // 月球黄道经度 = 太阳经度 + 月相角
+                var moonPhase = (daysSinceNew % synodicMonth) / synodicMonth;
+                var sunLongitude = eP.angle + Math.PI;
+                var moonInitAngle = sunLongitude + moonPhase * 2 * Math.PI;
                 
                 moon = {mesh:mMesh, earth:eP, angle:moonInitAngle, dist:4};
-                console.log('Moon phase:', (moonPhase * 100).toFixed(1) + '% (下弦月), 黄道经度:', (moonInitAngle * 180 / Math.PI % 360).toFixed(1) + '°');
             }
             
             // 小行星带
@@ -413,41 +458,104 @@
             if(pi) pi.innerHTML = h;
         }
 
-        // 更新模拟时间显示
-        function updateSimDateDisplay() {
-            var displayDate = new Date(simDate.getTime() + simDays * 24 * 60 * 60 * 1000);
-            var dateStr = displayDate.getFullYear() + '-' + 
-                          String(displayDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                          String(displayDate.getDate()).padStart(2, '0');
-            var el = document.getElementById('sim-date');
-            if(el) el.textContent = dateStr;
-        }
-
-        // 事件监听
-        var sl = document.getElementById('speed-control');
-        var sv = document.getElementById('speed-value');
-        if(sl) sl.addEventListener('input', function(){ 
-            speedMultiplier = parseFloat(this.value); 
-            if(sv) {
-                if(speedMultiplier >= 1000000) {
-                    sv.textContent = (speedMultiplier / 1000000).toFixed(1) + 'Mx';
-                } else if(speedMultiplier >= 1000) {
-                    sv.textContent = (speedMultiplier / 1000).toFixed(1) + 'Kx';
-                } else {
-                    sv.textContent = speedMultiplier.toFixed(0) + 'x';
-                }
-            }
+        // 速率档位按钮
+        document.querySelectorAll('.speed-btn').forEach(function(btn, index) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.speed-btn').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                speedMultiplier = speedLevels[index];
+                currentSpeedIndex = index;
+            });
         });
         
+        // 暂停按钮
         var pb = document.getElementById('pause-btn');
-        if(pb) pb.addEventListener('click', function(){ paused = !paused; pb.textContent = paused ? '▶ 继续' : '⏸ 暂停'; });
+        if(pb) pb.addEventListener('click', function(){ 
+            paused = !paused; 
+            pb.textContent = paused ? '▶ 继续' : '⏸ 暂停';
+            lastRealTime = Date.now();  // 重置时间基准
+        });
         
+        // 调整时间按钮
+        var adjustBtn = document.getElementById('adjust-btn');
+        var timeAdjust = document.getElementById('time-adjust');
+        var applyBtn = document.getElementById('apply-time');
+        
+        if(adjustBtn && timeAdjust) {
+            adjustBtn.addEventListener('click', function() {
+                timeAdjust.classList.toggle('show');
+                if(timeAdjust.classList.contains('show')) {
+                    var d = new Date(simTime);
+                    document.getElementById('year-input').value = d.getFullYear();
+                    document.getElementById('month-input').value = d.getMonth() + 1;
+                    document.getElementById('day-input').value = d.getDate();
+                    document.getElementById('hour-input').value = d.getHours();
+                    document.getElementById('minute-input').value = d.getMinutes();
+                    document.getElementById('second-input').value = d.getSeconds();
+                }
+            });
+        }
+        
+        if(applyBtn) {
+            applyBtn.addEventListener('click', function() {
+                var year = parseInt(document.getElementById('year-input').value);
+                var month = parseInt(document.getElementById('month-input').value) - 1;
+                var day = parseInt(document.getElementById('day-input').value);
+                var hour = parseInt(document.getElementById('hour-input').value);
+                var minute = parseInt(document.getElementById('minute-input').value);
+                var second = parseInt(document.getElementById('second-input').value);
+                
+                simTime = new Date(year, month, day, hour, minute, second).getTime();
+                lastRealTime = Date.now();
+                updatePlanetsPosition(simTime);
+                updateTimeDisplay();
+                timeAdjust.classList.remove('show');
+            });
+        }
+        
+        // 重置到当前时间
+        var resetBtn = document.getElementById('reset-btn');
+        if(resetBtn) {
+            resetBtn.addEventListener('click', function() {
+                simTime = Date.now();
+                lastRealTime = Date.now();
+                updatePlanetsPosition(simTime);
+                updateTimeDisplay();
+            });
+        }
+        
+        // 键盘控制
         document.addEventListener('keydown', function(e){
-            if(e.code === 'Space'){ e.preventDefault(); paused = !paused; if(pb) pb.textContent = paused ? '▶ 继续' : '⏸ 暂停'; }
-            if(e.code === 'ArrowUp'){ speedMultiplier = Math.min(speedMultiplier + 5, 200); if(sl) sl.value = speedMultiplier; if(sv) sv.textContent = speedMultiplier.toFixed(0) + 'x'; }
-            if(e.code === 'ArrowDown'){ speedMultiplier = Math.max(speedMultiplier - 5, 1); if(sl) sl.value = speedMultiplier; if(sv) sv.textContent = speedMultiplier.toFixed(0) + 'x'; }
-            if(e.code === 'KeyR'){ camera.position.set(0,120,200); controls.target.set(0,0,0); controls.minDistance = 5; stopTrack(); }
-            if(e.code === 'Escape') stopTrack();
+            if(e.code === 'Space'){ 
+                e.preventDefault(); 
+                paused = !paused; 
+                if(pb) pb.textContent = paused ? '▶ 继续' : '⏸ 暂停';
+                lastRealTime = Date.now();
+            }
+            if(e.code === 'Equal' || e.code === 'NumpadAdd') {  // + 键
+                currentSpeedIndex = Math.min(currentSpeedIndex + 1, speedLevels.length - 1);
+                speedMultiplier = speedLevels[currentSpeedIndex];
+                document.querySelectorAll('.speed-btn').forEach(function(b, i) {
+                    b.classList.toggle('active', i === currentSpeedIndex);
+                });
+            }
+            if(e.code === 'Minus' || e.code === 'NumpadSubtract') {  // - 键
+                currentSpeedIndex = Math.max(currentSpeedIndex - 1, 0);
+                speedMultiplier = speedLevels[currentSpeedIndex];
+                document.querySelectorAll('.speed-btn').forEach(function(b, i) {
+                    b.classList.toggle('active', i === currentSpeedIndex);
+                });
+            }
+            if(e.code === 'KeyR'){ 
+                simTime = Date.now();
+                lastRealTime = Date.now();
+                updatePlanetsPosition(simTime);
+                updateTimeDisplay();
+            }
+            if(e.code === 'Escape') {
+                stopTrack();
+                if(timeAdjust) timeAdjust.classList.remove('show');
+            }
         });
 
         // 点击/拖动检测
@@ -464,13 +572,12 @@
                 var dx = e.clientX - mouseDownPos.x;
                 var dy = e.clientY - mouseDownPos.y;
                 if(Math.sqrt(dx*dx + dy*dy) > 5){
-                    isMouseDrag = true; // 移动超过5px就是拖动
+                    isMouseDrag = true;
                 }
             }
         });
         
         renderer.domElement.addEventListener('mouseup', function(e){
-            // 只有不是拖动，才检测是否退出跟踪
             if(!isMouseDrag && trackTarget){
                 stopTrack();
             }
@@ -478,7 +585,6 @@
             isMouseDrag = false;
         });
         
-        // 触屏设备同样处理
         var touchDownPos = null;
         var isTouchDrag = false;
         
@@ -520,21 +626,21 @@
     function animate() {
         requestAnimationFrame(animate);
         
-        // 实时模式：n倍速 = 1秒真实时间 = n秒模拟时间
-        // dt_seconds = 模拟的秒数，dt_days = 模拟的天数
-        var dt_seconds = paused ? 0 : speedMultiplier / 60; // 60fps
-        var dt_days = dt_seconds / 86400;
+        // 计算真实时间流逝
+        var realNow = Date.now();
+        var realElapsed = realNow - lastRealTime;  // 毫秒
+        lastRealTime = realNow;
         
-        // 更新模拟天数
-        simDays += dt_days;
-        simSeconds += dt_seconds;
-        
-        // 每100帧更新一次日期显示
-        if(Math.floor(simDays * 10) % 10 === 0) {
-            updateSimDateDisplay();
+        // 更新模拟时间
+        if(!paused) {
+            simTime += realElapsed * speedMultiplier * 1000;  // 转换为模拟毫秒
+            updateTimeDisplay();
         }
         
-        // 太阳自转（真实周期约25.4天）
+        var dt_seconds = realElapsed * speedMultiplier / 1000;
+        var dt_days = dt_seconds / 86400;
+        
+        // 太阳自转
         if(sunMesh){
             var sunRotationPeriod = 25.4;
             sunMesh.rotation.y += dt_days / sunRotationPeriod * 2 * Math.PI;
@@ -544,34 +650,29 @@
         
         // 月球
         if(moon){
-            // 月球公转周期约27.3天
             moon.angle += dt_days / 27.3 * 2 * Math.PI;
             moon.mesh.position.x = moon.earth.pivot.position.x + Math.cos(moon.angle) * moon.dist;
             moon.mesh.position.z = moon.earth.pivot.position.z + Math.sin(moon.angle) * moon.dist;
-            // 月球自转周期 = 公转周期（潮汐锁定）
             moon.mesh.rotation.y = moon.angle;
         }
         
         // 行星公转和自转
         planets.forEach(function(p){
-            // 公转：角度增量 = dt_days / 公转周期 * 2π，位置更新用 pivot
             p.angle += dt_days / p.data.orbital_period * 2 * Math.PI;
             var r = p.a * (1 - p.e * p.e) / (1 + p.e * Math.cos(p.angle));
             var x = r * Math.cos(p.angle);
             var z = r * Math.sin(p.angle);
             p.pivot.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
             
-            // 自转：绕Y轴旋转，只用 mesh
             var rotationPeriod = p.data.rotation_period || 1;
-            var rotationDir = rotationPeriod < 0 ? -1 : 1; // 金星逆向自转
+            var rotationDir = rotationPeriod < 0 ? -1 : 1;
             p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
         });
         
-        // 小行星带公转
+        // 小行星带
         if(asteroidBelt){
             var positions = asteroidBelt.geometry.attributes.position.array;
             for(var i = 0; i < asteroidAngles.length; i++){
-                // 小行星带公转周期约 3-6 年，取平均 4.5 年 = 1642.5 天
                 asteroidAngles[i] += dt_days / 1642.5 * 2 * Math.PI;
                 var dist = Math.sqrt(positions[i*3]*positions[i*3] + positions[i*3+2]*positions[i*3+2]);
                 positions[i*3] = Math.cos(asteroidAngles[i]) * dist;
@@ -616,15 +717,6 @@
         
         controls.update();
         renderer.render(scene, camera);
-    }
-    
-    function updateSimDateDisplay() {
-        var displayDate = new Date(simDate.getTime() + simDays * 24 * 60 * 60 * 1000);
-        var dateStr = displayDate.getFullYear() + '-' + 
-                      String(displayDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                      String(displayDate.getDate()).padStart(2, '0');
-        var el = document.getElementById('sim-date');
-        if(el) el.textContent = dateStr;
     }
 
     if (typeof window !== 'undefined' && typeof THREE !== 'undefined') { window.THREE = THREE; }
