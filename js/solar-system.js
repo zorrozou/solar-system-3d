@@ -308,7 +308,7 @@
                 });
             });
             
-            // 月球
+            // 月球：根据当前日期计算初始位置
             var eP = planets.find(function(p){ return p.data.name === 'Earth'; });
             if(eP){
                 var mMesh = new THREE.Mesh(
@@ -316,7 +316,23 @@
                     new THREE.MeshPhongMaterial({map: texLoader.load('/solar-system/textures/planets/Moon.jpg'), shininess:5})
                 );
                 scene.add(mMesh);
-                moon = {mesh:mMesh, earth:eP, angle:0, dist:4};
+                
+                // 计算月球初始角度
+                // 新月参考点: 2000-01-06 18:14 UTC
+                var newMoonRef = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
+                var daysSinceNew = (simDate.getTime() - newMoonRef.getTime()) / (1000 * 60 * 60 * 24);
+                var synodicMonth = 29.530588;
+                var moonPhase = (daysSinceNew % synodicMonth) / synodicMonth;  // 0=新月, 0.5=满月
+                
+                // 月球黄道经度 = 太阳黄道经度 + 月相角
+                // 太阳黄道经度 = 地球黄道经度 + 180°
+                var earthAngle = eP.angle;  // 地球黄道经度
+                var sunLongitude = earthAngle + Math.PI;  // 太阳黄道经度
+                var phaseAngle = moonPhase * 2 * Math.PI;  // 月相角（从太阳向东）
+                var moonInitAngle = sunLongitude + phaseAngle;  // 月球黄道经度 = 太阳经度 + 月相角
+                
+                moon = {mesh:mMesh, earth:eP, angle:moonInitAngle, dist:4};
+                console.log('Moon phase:', (moonPhase * 100).toFixed(1) + '% (下弦月), 黄道经度:', (moonInitAngle * 180 / Math.PI % 360).toFixed(1) + '°');
             }
             
             // 小行星带
