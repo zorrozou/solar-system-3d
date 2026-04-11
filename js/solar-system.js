@@ -233,26 +233,7 @@
                 mesh.userData = d;
                 scene.add(pivot);
                 
-                // 地球特殊处理：添加北京标记点
-                if(d.name === 'Earth'){
-                    // 北京：东经116度，北纬40度
-                    var beijingLon = 116 * Math.PI / 180;
-                    var beijingLat = 40 * Math.PI / 180;
-                    
-                    // 计算北京在球面上的位置
-                    var markerRadius = radius * 1.01;
-                    var markerX = markerRadius * Math.cos(beijingLat) * Math.sin(beijingLon);
-                    var markerY = markerRadius * Math.sin(beijingLat);
-                    var markerZ = markerRadius * Math.cos(beijingLat) * Math.cos(beijingLon);
-                    
-                    var beijingMarker = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.15, 8, 8),
-                        new THREE.MeshBasicMaterial({color: 0xff0000})
-                    );
-                    beijingMarker.position.set(markerX, markerY, markerZ);
-                    mesh.add(beijingMarker);
-                    console.log('Beijing marker added');
-                }
+                // 北京标记点在后面统一处理（修正经度映射后添加）
                 
                 // 土星环（跟球体一起自转）
                 if(d.name === 'Saturn'){
@@ -284,17 +265,18 @@
                     console.log('Earth: Beijing', beijingHour.toFixed(1), 'rotation:', (initialRotation*180/Math.PI).toFixed(1) + '°');
                     
                     // 北京标记：东经116度，北纬40度
-                    var beijingLonDeg = 64;
+                    // Three.js球体UV映射：theta=0→U=0→太平洋(180°经线)
+                    // 本初子午线(0°)在theta=π（-Z方向）
+                    // 公式：theta = π - 经度(弧度)
+                    var beijingLonDeg = 116;
                     var beijingLatDeg = 40;
-                    // Three.js球体经度计算：Z轴=0°，X轴=90°
-                    // 需要调整让经度116°对应北京
-                    var beijingLon = (beijingLonDeg - 90) * Math.PI / 180;
+                    var beijingTheta = Math.PI - beijingLonDeg * Math.PI / 180;
                     var beijingLat = beijingLatDeg * Math.PI / 180;
                     
                     var markerR = radius * 1.02;
-                    var mx = markerR * Math.cos(beijingLat) * Math.sin(beijingLon);
+                    var mx = markerR * Math.cos(beijingLat) * Math.sin(beijingTheta);
                     var my = markerR * Math.sin(beijingLat);
-                    var mz = markerR * Math.cos(beijingLat) * Math.cos(beijingLon);
+                    var mz = markerR * Math.cos(beijingLat) * Math.cos(beijingTheta);
                     
                     var beijingMarker = new THREE.Mesh(
                         new THREE.SphereGeometry(0.15, 8, 8),
@@ -302,7 +284,7 @@
                     );
                     beijingMarker.position.set(mx, my, mz);
                     mesh.add(beijingMarker);
-                    console.log('Beijing marker: lon', beijingLonDeg, 'lat', beijingLatDeg);
+                    console.log('Beijing marker: lon', beijingLonDeg, 'lat', beijingLatDeg, 'theta', (beijingTheta*180/Math.PI).toFixed(1));
                 }
                 
                 // 椭圆轨道线
