@@ -256,21 +256,15 @@
                 
                 // 地球自转初始化：根据当前时间设置初始角度
                 var initialRotation = 0;
+                var beijingTheta = 0;  // 北京标记在球体坐标系中的theta位置
                 if(d.name === 'Earth'){
-                    var beijingHour = (simDate.getUTCHours() + 8 + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600) % 24;
-                    var toSun = Math.atan2(-x0, -z0);
-                    var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
-                    initialRotation = toSun + rotationFromNoon;
-                    mesh.rotation.y = initialRotation;
-                    console.log('Earth: Beijing', beijingHour.toFixed(1), 'rotation:', (initialRotation*180/Math.PI).toFixed(1) + '°');
-                    
                     // 北京标记：东经116度，北纬40度
-                    // Three.js球体UV映射：theta=0→U=0→太平洋(180°经线)
-                    // 本初子午线(0°)在theta=π（-Z方向）
-                    // 公式：theta = π - 经度(弧度)
+                    // Three.js球体UV映射：theta=0(+Z)→U=0→太平洋(180°经线)
+                    // theta=π(-Z)→U=0.5→本初子午线(0°)
+                    // 东经用正值：theta = π + lon
                     var beijingLonDeg = 116;
                     var beijingLatDeg = 40;
-                    var beijingTheta = Math.PI - beijingLonDeg * Math.PI / 180;
+                    beijingTheta = Math.PI + beijingLonDeg * Math.PI / 180;  // ≈296°
                     var beijingLat = beijingLatDeg * Math.PI / 180;
                     
                     var markerR = radius * 1.02;
@@ -284,7 +278,20 @@
                     );
                     beijingMarker.position.set(mx, my, mz);
                     mesh.add(beijingMarker);
-                    console.log('Beijing marker: lon', beijingLonDeg, 'lat', beijingLatDeg, 'theta', (beijingTheta*180/Math.PI).toFixed(1));
+                    console.log('Beijing marker: lon', beijingLonDeg, 'lat', beijingLatDeg, 'theta', (beijingTheta*180/Math.PI).toFixed(1) + '°');
+                    
+                    // 自转初始化：让北京标记在当前时间正对正确的太阳方向
+                    // 球体旋转后，标记实际朝向theta = beijingTheta + rotation.y
+                    // 北京时间9:50 → 正午前2小时 → 太阳在东边偏32°
+                    var beijingHour = (simDate.getUTCHours() + 8 + simDate.getUTCMinutes()/60 + simDate.getUTCSeconds()/3600) % 24;
+                    var toSun = Math.atan2(-x0, -z0);  // 地球到太阳的方向(theta)
+                    var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;  // 北京时间相对于正午
+                    // 正午时北京标记正对太阳：beijingTheta + R = toSun
+                    // 当前时间：beijingTheta + R = toSun + rotationFromNoon
+                    // 所以：R = toSun + rotationFromNoon - beijingTheta
+                    initialRotation = toSun + rotationFromNoon - beijingTheta;
+                    mesh.rotation.y = initialRotation;
+                    console.log('Earth: Beijing', beijingHour.toFixed(1), 'h, toSun', (toSun*180/Math.PI).toFixed(1) + '°, rotation:', (initialRotation*180/Math.PI).toFixed(1) + '°');
                 }
                 
                 // 椭圆轨道线
