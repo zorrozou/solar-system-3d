@@ -164,19 +164,15 @@
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
                 
                 // 根据当前日期计算初始角度
-                var angle = 0;
-                if(d.name === 'Earth'){
-                    // 地球：从春分点开始计算（季节更直观）
-                    // 春分点(3月20日) = 角度0
-                    angle = (daysSinceSpringEquinox / 365.25) * 2 * Math.PI;
-                } else {
-                    // 其他行星：使用 J2000 平均近点角
-                    // 注意：这是简化计算，未考虑近日点经度
-                    var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180;
-                    var meanMotion = 2 * Math.PI / d.orbital_period;
-                    angle = M0 + meanMotion * daysSinceEpoch;
-                    angle = angle % (2 * Math.PI);
-                }
+                // 所有行星：黄道经度 = 平均近点角 M + 近日点经度 ω
+                var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180;
+                var omega = (d.perihelion_longitude || 0) * Math.PI / 180;
+                var meanMotion = 2 * Math.PI / d.orbital_period;
+                var M = M0 + meanMotion * daysSinceEpoch;
+                // 真近点角（简化：直接用M，未解开普勒方程）
+                // 黄道经度 = M + ω
+                var angle = M + omega;
+                angle = angle % (2 * Math.PI);
                 
                 // 计算初始位置
                 var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
