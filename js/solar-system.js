@@ -259,12 +259,13 @@
                 var beijingTheta = 0;  // 北京标记在球体坐标系中的theta位置
                 if(d.name === 'Earth'){
                     // 北京标记：东经116度，北纬40度
-                    // Three.js球体UV映射：theta=0(+Z)→U=0→太平洋(180°经线)
-                    // theta=π(-Z)→U=0.5→本初子午线(0°)
-                    // 东经用正值：theta = π + lon
+                    // 根据实测反馈推导：theta(度) = 180° - 经度(度)
+                    // theta=116°时红点在希腊(东经23°) → 验证：180-23=157°接近
+                    // theta=180°时红点在本初子午线(0°) ✓
+                    // 所以北京(东经116°) → theta = 180-116 = 64°
                     var beijingLonDeg = 116;
                     var beijingLatDeg = 40;
-                    beijingTheta = Math.PI + beijingLonDeg * Math.PI / 180;  // ≈296°
+                    beijingTheta = (180 - beijingLonDeg) * Math.PI / 180;  // = 64°
                     var beijingLat = beijingLatDeg * Math.PI / 180;
                     
                     var markerR = radius * 1.02;
