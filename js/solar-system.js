@@ -164,15 +164,29 @@
                 var radius = Math.max(d.radius / 6371 * 2, 0.5);
                 
                 // 根据当前日期计算初始角度
-                // 所有行星：黄道经度 = 平均近点角 M + 近日点经度 ω
+                // 使用开普勒方程求解真近点角
                 var M0 = (d.mean_anomaly_j2000 || 0) * Math.PI / 180;
                 var omega = (d.perihelion_longitude || 0) * Math.PI / 180;
                 var meanMotion = 2 * Math.PI / d.orbital_period;
-                var M = M0 + meanMotion * daysSinceEpoch;
-                // 真近点角（简化：直接用M，未解开普勒方程）
-                // 黄道经度 = M + ω
-                var angle = M + omega;
-                angle = angle % (2 * Math.PI);
+                var M = M0 + meanMotion * daysSinceEpoch;  // 平均近点角
+                
+                // 解开普勒方程: M = E - e*sin(E)
+                // 牛顿迭代法
+                var E = M;  // 初始猜测
+                for(var iter = 0; iter < 10; iter++){
+                    var dE = (M - E + e * Math.sin(E)) / (1 - e * Math.cos(E));
+                    E += dE;
+                    if(Math.abs(dE) < 1e-8) break;
+                }
+                
+                // 真近点角: tan(ν/2) = sqrt((1+e)/(1-e)) * tan(E/2)
+                var nu = 2 * Math.atan2(
+                    Math.sqrt(1 + e) * Math.sin(E / 2),
+                    Math.sqrt(1 - e) * Math.cos(E / 2)
+                );
+                
+                // 黄道经度 = 近日点经度 + 真近点角
+                var angle = (omega + nu) % (2 * Math.PI);
                 
                 // 计算初始位置
                 var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
