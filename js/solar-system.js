@@ -458,15 +458,23 @@
             if(pi) pi.innerHTML = h;
         }
 
-        // 速率档位按钮
-        document.querySelectorAll('.speed-btn').forEach(function(btn, index) {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.speed-btn').forEach(function(b) { b.classList.remove('active'); });
-                btn.classList.add('active');
-                speedMultiplier = speedLevels[index];
-                currentSpeedIndex = index;
+        // 速率滑块控制
+        var speedSlider = document.getElementById('speed-slider');
+        var speedValueEl = document.getElementById('speed-value');
+        
+        function updateSpeedDisplay() {
+            if(speedValueEl) speedValueEl.textContent = speedLabels[currentSpeedIndex];
+            if(speedSlider) speedSlider.value = currentSpeedIndex;
+        }
+        
+        if(speedSlider) {
+            speedSlider.addEventListener('input', function() {
+                currentSpeedIndex = parseInt(this.value);
+                speedMultiplier = speedLevels[currentSpeedIndex];
+                updateSpeedDisplay();
             });
-        });
+            updateSpeedDisplay();
+        }
         
         // 暂停按钮
         var pb = document.getElementById('pause-btn');
@@ -532,19 +540,15 @@
                 if(pb) pb.textContent = paused ? '▶ 继续' : '⏸ 暂停';
                 lastRealTime = Date.now();
             }
-            if(e.code === 'Equal' || e.code === 'NumpadAdd') {  // + 键
+            if(e.code === 'Equal' || e.code === 'NumpadAdd' || e.code === 'ArrowRight') {  // + 或→键
                 currentSpeedIndex = Math.min(currentSpeedIndex + 1, speedLevels.length - 1);
                 speedMultiplier = speedLevels[currentSpeedIndex];
-                document.querySelectorAll('.speed-btn').forEach(function(b, i) {
-                    b.classList.toggle('active', i === currentSpeedIndex);
-                });
+                updateSpeedDisplay();
             }
-            if(e.code === 'Minus' || e.code === 'NumpadSubtract') {  // - 键
+            if(e.code === 'Minus' || e.code === 'NumpadSubtract' || e.code === 'ArrowLeft') {  // - 或←键
                 currentSpeedIndex = Math.max(currentSpeedIndex - 1, 0);
                 speedMultiplier = speedLevels[currentSpeedIndex];
-                document.querySelectorAll('.speed-btn').forEach(function(b, i) {
-                    b.classList.toggle('active', i === currentSpeedIndex);
-                });
+                updateSpeedDisplay();
             }
             if(e.code === 'KeyR'){ 
                 simTime = Date.now();
@@ -633,7 +637,9 @@
         
         // 更新模拟时间
         if(!paused) {
-            simTime += realElapsed * speedMultiplier * 1000;  // 转换为模拟毫秒
+            // speedMultiplier = 模拟秒/真实秒
+            // realElapsed 毫秒 * speedMultiplier = 模拟毫秒
+            simTime += realElapsed * speedMultiplier;
             updateTimeDisplay();
         }
         
