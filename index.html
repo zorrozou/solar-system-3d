@@ -96,8 +96,9 @@
             <button id="reset-btn" class="toolbar-btn">🔄 当前</button>
         </div>
         <div id="time-panel">
-            <div id="sim-time">00:00:00</div>
-            <div id="sim-date">2026-01-01</div>
+            <div id="sim-time">--:--:--</div>
+            <div id="sim-date">加载中...</div>
+            <div id="season-info" style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:3px;"></div>
         </div>
     </div>
 
@@ -123,7 +124,7 @@
         <div id="planet-info"></div>
     </div>
 
-    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放 · 空格暂停</div>
+    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放 · 空格暂停 · 行星大小为非线性缩放</div>
 
     <div id="controls">
         <span id="speed-label">速率</span>
@@ -138,6 +139,6 @@
 
     <script src="lib/three.min.js"></script>
     <script src="lib/OrbitControls.js"></script>
-    <script src="js/solar-system.js?v=2.6.3"></script>
+    <script src="js/solar-system.js?v=5.1.0"></script>
 </body>
 </html>
