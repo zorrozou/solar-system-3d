@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>3D 太阳系 - Zorro's Space</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪐</text></svg>">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body { font-family: -apple-system, 'Noto Sans SC', sans-serif; background: #000; color: #fff; touch-action: none; }
+        #canvas-container { width: 100vw; height: 100vh; cursor: grab; }
+        #canvas-container:active { cursor: grabbing; }
+        
+        /* 左上角工具栏 */
+        .toolbar { position: fixed; top: 12px; left: 12px; z-index: 20; display: flex; flex-direction: column; gap: 8px; }
+        .toolbar-row { display: flex; gap: 8px; }
+        .toolbar-btn { padding: 8px 14px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 18px; color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; cursor: pointer; }
+        .toolbar-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .toolbar-btn.active { background: rgba(96,165,250,0.3); color: #60a5fa; border-color: #60a5fa; }
+        
+        /* 时间显示面板 - 放在工具栏下方 */
+        #time-panel { background: rgba(8,10,20,0.85); border-radius: 12px; padding: 8px 14px; text-align: left; }
+        #sim-time { font-size: 16px; font-weight: 600; color: #60a5fa; }
+        #sim-date { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+        
+        /* 时间调整面板 */
+        #time-adjust { position: fixed; top: 120px; left: 12px; background: rgba(8,10,20,0.9); border-radius: 12px; padding: 12px 16px; z-index: 20; display: none; flex-direction: column; gap: 10px; min-width: 200px; }
+        #time-adjust.show { display: flex; }
+        .time-row { display: flex; align-items: center; gap: 6px; justify-content: flex-start; }
+        .time-row label { color: rgba(255,255,255,0.6); font-size: 12px; min-width: 24px; }
+        .time-row input { width: 50px; padding: 4px 6px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; background: rgba(0,0,0,0.3); color: #fff; font-size: 14px; text-align: center; }
+        .time-row input:focus { outline: none; border-color: #60a5fa; }
+        #apply-time { padding: 6px 16px; background: #60a5fa; border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; margin-top: 4px; }
+        #apply-time:hover { background: #3b82f6; }
+        
+        #info-panel { position: fixed; top: 12px; right: 12px; background: rgba(8,10,20,0.92); padding: 18px; border-radius: 14px; width: 280px; max-width: calc(100vw - 24px); max-height: calc(100vh - 80px); overflow-y: auto; display: none; z-index: 10; }
+        #planet-name { font-size: 18px; font-weight: 600; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
+        .stat { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 12px; }
+        .stat-label { color: rgba(255,255,255,0.5); }
+        .stat-value { color: #fff; font-weight: 500; }
+        .planet-desc { margin-top: 10px; color: rgba(255,255,255,0.6); line-height: 1.5; font-size: 12px; }
+        
+        .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 16px; color: rgba(255,255,255,0.5); z-index: 100; }
+        .loading.error { color: #ff6b6b; }
+        
+        .hint { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.3); font-size: 11px; z-index: 10; pointer-events: none; text-align: center; }
+        
+        .planet-label { pointer-events: auto; }
+        
+        /* 底部控制面板 - 滑块式 */
+        #controls { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(8,10,20,0.85); padding: 12px 20px; border-radius: 24px; z-index: 10; display: flex; align-items: center; gap: 12px; }
+        
+        #speed-label { font-size: 12px; color: rgba(255,255,255,0.6); min-width: 60px; }
+        #speed-value { font-size: 14px; font-weight: 600; color: #60a5fa; min-width: 80px; text-align: center; }
+        
+        #speed-slider { width: 180px; height: 6px; -webkit-appearance: none; background: rgba(255,255,255,0.15); border-radius: 3px; outline: none; }
+        #speed-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #60a5fa; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+        #speed-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #60a5fa; cursor: pointer; border: none; }
+        
+        #pause-btn { padding: 8px 16px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 8px; cursor: pointer; font-size: 13px; }
+        #pause-btn:hover { background: rgba(255,255,255,0.2); }
+        
+        .key-hints { position: fixed; bottom: 8px; left: 8px; color: rgba(255,255,255,0.3); font-size: 10px; z-index: 5; line-height: 1.5; }
+        
+        /* 移动端适配 */
+        @media (max-width: 600px) {
+            .toolbar { top: 8px; left: 8px; gap: 6px; }
+            .toolbar-btn { padding: 6px 10px; font-size: 11px; }
+            #time-panel { padding: 6px 10px; }
+            #sim-time { font-size: 14px; }
+            #sim-date { font-size: 11px; }
+            #time-adjust { top: 100px; left: 8px; min-width: 180px; }
+            #info-panel { width: calc(100vw - 16px); left: 8px; right: 8px; top: auto; bottom: 90px; padding: 12px; max-height: 35vh; }
+            #controls { bottom: 12px; padding: 10px 14px; gap: 10px; }
+            #speed-slider { width: 120px; }
+            #speed-label { font-size: 11px; min-width: 50px; }
+            #speed-value { font-size: 12px; min-width: 70px; }
+            .hint { bottom: 60px; font-size: 10px; }
+            .key-hints { display: none; }
+        }
+        
+        @media (max-width: 380px) {
+            #speed-slider { width: 100px; }
+            #controls { padding: 8px 12px; gap: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-row">
+            <a href="/" class="toolbar-btn">← 返回</a>
+            <button id="adjust-btn" class="toolbar-btn">📅 调整</button>
+            <button id="reset-btn" class="toolbar-btn">🔄 当前</button>
+        </div>
+        <div id="time-panel">
+            <div id="sim-time">00:00:00</div>
+            <div id="sim-date">2026-01-01</div>
+        </div>
+    </div>
+
+    <div id="time-adjust">
+        <div class="time-row">
+            <label>年</label><input type="number" id="year-input" min="2000" max="2100">
+            <label>月</label><input type="number" id="month-input" min="1" max="12">
+            <label>日</label><input type="number" id="day-input" min="1" max="31">
+        </div>
+        <div class="time-row">
+            <label>时</label><input type="number" id="hour-input" min="0" max="23">
+            <label>分</label><input type="number" id="minute-input" min="0" max="59">
+            <label>秒</label><input type="number" id="second-input" min="0" max="59">
+        </div>
+        <button id="apply-time">应用时间</button>
+    </div>
+
+    <div id="canvas-container"></div>
+    <div class="loading" id="loading">加载中...</div>
+
+    <div id="info-panel">
+        <h2 id="planet-name"></h2>
+        <div id="planet-info"></div>
+    </div>
+
+    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放 · 空格暂停</div>
+
+    <div id="controls">
+        <span id="speed-label">速率</span>
+        <input type="range" id="speed-slider" min="0" max="9" step="1" value="0">
+        <span id="speed-value">1秒=1秒</span>
+        <button id="pause-btn">⏸ 暂停</button>
+    </div>
+
+    <div class="key-hints">
+        空格:暂停 | ←→:切换档位 | R:当前时间 | ESC:退出跟踪
+    </div>
+
+    <script src="lib/three.min.js"></script>
+    <script src="lib/OrbitControls.js"></script>
+    <script src="js/solar-system.js?v=2.6.3"></script>
+</body>
+</html>

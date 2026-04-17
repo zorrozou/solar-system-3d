@@ -2,14 +2,12 @@
     var scene, camera, renderer, controls;
     var planets = [];
     var sunMesh = null;
-    var sunLabel = null;
     var speedMultiplier = 1;  // 速率倍数（模拟秒/真实秒）
     var moon = null;
     var paused = false;
     var sunPulse = 0;
     var asteroidBelt = null;
     var asteroidAngles = [];
-    var asteroidPeriods = [];
     
     // 精确的模拟时间（毫秒级）
     var simTime = Date.now();  // 模拟时间的毫秒时间戳
@@ -21,7 +19,6 @@
     var speedLabels = ['1秒=1秒', '1秒=1分', '1秒=10分', '1秒=1时', '1秒=6时', '1秒=1天', '1秒=1周', '1秒=1月', '1秒=1季', '1秒=1年'];
     
     // 视角系统
-    var orbitLines = [];
     var trackTarget = null;
     var trackOffset = null;
     var isFlying = false;
@@ -56,22 +53,8 @@
         var formatted = formatDateTime(simTime);
         var timeEl = document.getElementById('sim-time');
         var dateEl = document.getElementById('sim-date');
-        var seasonEl = document.getElementById('season-info');
         if(timeEl) timeEl.textContent = formatted.time;
         if(dateEl) dateEl.textContent = formatted.date;
-        if(seasonEl) {
-            var d = new Date(simTime);
-            var year = d.getFullYear();
-            var spring = new Date(year, 2, 20);
-            if(d < spring) { year--; spring = new Date(year, 2, 20); }
-            var daysSinceSpring = (d - spring) / 86400000;
-            var angle = (daysSinceSpring / 365.25) * 360;
-            var terms = ['春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至','小寒','大寒','立春','雨水','惊蛰'];
-            var idx = Math.floor(((angle % 360 + 360) % 360) / 15);
-            var term = terms[Math.min(idx, 23)];
-            var season = angle < 90 ? '春' : angle < 180 ? '夏' : angle < 270 ? '秋' : '冬';
-            seasonEl.textContent = term + ' · 北半球' + season + '季';
-        }
     }
 
     // 根据时间重新计算所有行星位置
@@ -106,9 +89,9 @@
             p.angle = (omega + nu) % (2 * Math.PI);
             
             // 更新位置
-            var r = p.a * (1 - e * e) / (1 + e * Math.cos(nu));
+            var r = p.a * (1 - e * e) / (1 + e * Math.cos(p.angle));
             var x = r * Math.cos(p.angle);
-            var z = -r * Math.sin(p.angle);
+            var z = r * Math.sin(p.angle);
             p.pivot.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
             
             // 更新地球自转
@@ -117,8 +100,14 @@
                 var beijingHour = (d2.getUTCHours() + 8 + d2.getUTCMinutes()/60 + d2.getUTCSeconds()/3600) % 24;
                 var toSun = Math.atan2(-x, -z);
                 var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
-                var beijingTheta = 206.397 * Math.PI / 180;
+                var beijingTheta = 206 * Math.PI / 180;
                 p.mesh.rotation.y = toSun + rotationFromNoon - beijingTheta;
+                
+                // 木星初始旋转：让大红斑面向太阳
+                if(d.name === 'Jupiter'){
+                    var jupiterToSun = Math.atan2(-x0, -z0);
+                    mesh.rotation.y = 0; // 大红斑面向太阳
+                }
             }
         });
         
@@ -145,13 +134,13 @@
         updateTimeDisplay();
         
         scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 30000);
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 20000);
         camera.position.set(0, 120, 200);
         
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = false;
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFShadowMap;
         document.getElementById('canvas-container').appendChild(renderer.domElement);
         
@@ -160,7 +149,7 @@
         controls.dampingFactor = 0.08;
         controls.rotateSpeed = 0.8;
         controls.minDistance = 5;
-        controls.maxDistance = 2000;
+        controls.maxDistance = 800;
         
         controls.addEventListener('start', function() {
             isDragging = true;
@@ -172,133 +161,72 @@
         });
         
         // 光照
-        scene.add(new THREE.AmbientLight(0x222233, 0.5));
-        var sunLight = new THREE.PointLight(0xfff5e6, 1.8, 5000);
+        scene.add(new THREE.AmbientLight(0x222244, 0.3));
+        var sunLight = new THREE.PointLight(0xfff5e6, 2.5, 3000);
         sunLight.position.set(0, 0, 0);
-        // 阴影系统已关闭（PointLight阴影开销大且效果不明显）
-        sunLight.castShadow = false;
+        sunLight.castShadow = true;
         scene.add(sunLight);
 
-        // 星空（多层次亮度）
-        var sGeo = new THREE.BufferGeometry(), sPos = [], sColors = [];
-        for (var i = 0; i < 10000; i++) {
-            var r = 3000 + Math.random() * 5000;
+        // 星空
+        var sGeo = new THREE.BufferGeometry(), sPos = [];
+        for (var i = 0; i < 5000; i++) {
+            var r = 3000 + Math.random() * 3000;
             var t = Math.random() * Math.PI * 2;
             var p = Math.acos(2 * Math.random() - 1);
             sPos.push(r*Math.sin(p)*Math.cos(t), r*Math.sin(p)*Math.sin(t), r*Math.cos(p));
-            var brightness = 0.3 + Math.random() * 0.7;
-            // 随机星星颜色偏移（蓝白/黄白/纯白）
-            var colorRand = Math.random();
-            if(colorRand < 0.1) { sColors.push(0.6*brightness, 0.7*brightness, brightness); } // 蓝星
-            else if(colorRand < 0.2) { sColors.push(brightness, 0.9*brightness, 0.6*brightness); } // 黄星
-            else { sColors.push(brightness, brightness, brightness); } // 白星
         }
         sGeo.setAttribute('position', new THREE.Float32BufferAttribute(sPos, 3));
-        sGeo.setAttribute('color', new THREE.Float32BufferAttribute(sColors, 3));
-        scene.add(new THREE.Points(sGeo, new THREE.PointsMaterial({size:1.2, vertexColors:true})));
+        scene.add(new THREE.Points(sGeo, new THREE.PointsMaterial({size:1.2})));
 
         // 太阳
-        // 太阳表面纹理（程序化生成）
-        var sunCanvas = document.createElement('canvas');
-        sunCanvas.width = 1024; sunCanvas.height = 512;
-        var sunCtx = sunCanvas.getContext('2d');
-        var sunGrad = sunCtx.createLinearGradient(0, 0, 1024, 512);
-        sunGrad.addColorStop(0, '#FDB813');
-        sunGrad.addColorStop(0.3, '#FDA813');
-        sunGrad.addColorStop(0.5, '#FFD700');
-        sunGrad.addColorStop(0.7, '#FDB813');
-        sunGrad.addColorStop(1, '#E8A317');
-        sunCtx.fillStyle = sunGrad;
-        sunCtx.fillRect(0, 0, 1024, 512);
-        // 太阳黑子和纹理细节
-        for(var si = 0; si < 200; si++) {
-            var sx = Math.random() * 1024;
-            var sy = Math.random() * 512;
-            var sr = 2 + Math.random() * 8;
-            sunCtx.beginPath();
-            sunCtx.arc(sx, sy, sr, 0, Math.PI * 2);
-            sunCtx.fillStyle = 'rgba(' + (200 + Math.random()*55) + ',' + (150 + Math.random()*55) + ',0,' + (0.1 + Math.random()*0.2) + ')';
-            sunCtx.fill();
-        }
-        var sunTexture = new THREE.CanvasTexture(sunCanvas);
-        
         sunMesh = new THREE.Mesh(
-            new THREE.SphereGeometry(5, 128, 128),
-            new THREE.MeshBasicMaterial({map: sunTexture})
+            new THREE.SphereGeometry(5, 32, 32),
+            new THREE.MeshBasicMaterial({color: 0xFDB813})
         );
         sunMesh.userData = {name:'Sun',name_cn:'太阳',description:'太阳是太阳系的中心天体，占太阳系总质量的99.86%', rotation_period: 25.4};
         scene.add(sunMesh);
         
-        // 太阳点击
-        sunLabel = document.createElement('div');
-        sunLabel.textContent = '太阳';
-        sunLabel.className = 'planet-label';
-        sunLabel.style.cssText='position:absolute;color:rgba(255,200,100,0.8);font-size:13px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transform:translate(-50%,-100%);';
-        sunLabel.addEventListener('click', function(e){ e.stopPropagation(); showInfo(sunMesh.userData); });
-        document.getElementById('canvas-container').appendChild(sunLabel);
-        
         // 太阳光晕
-        var gc=document.createElement('canvas');gc.width=gc.height=256;
+        var gc=document.createElement('canvas');gc.width=gc.height=128;
         var gx=gc.getContext('2d');
-        var gr=gx.createRadialGradient(128,128,0,128,128,128);
-        gr.addColorStop(0,'rgba(255,230,130,0.7)');
-        gr.addColorStop(0.15,'rgba(255,200,80,0.5)');
-        gr.addColorStop(0.4,'rgba(255,160,40,0.2)');
-        gr.addColorStop(0.7,'rgba(255,100,20,0.05)');
-        gr.addColorStop(1,'rgba(255,60,0,0)');
-        gx.fillStyle=gr;gx.fillRect(0,0,256,256);
-        var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(gc),transparent:true,opacity:0.85}));
-        sp.scale.set(50,50,1);
+        var gr=gx.createRadialGradient(64,64,0,64,64,64);
+        gr.addColorStop(0,'rgba(255,220,100,0.6)');
+        gr.addColorStop(0.4,'rgba(255,180,50,0.2)');
+        gr.addColorStop(1,'rgba(255,100,0,0)');
+        gx.fillStyle=gr;gx.fillRect(0,0,128,128);
+        var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(gc),transparent:true,opacity:0.7}));
+        sp.scale.set(30,30,1);
         sunMesh.add(sp);
-        
-        // 日冕射线（动态粒子）
-        var coronaCount = 200;
-        var coronaGeo = new THREE.BufferGeometry();
-        var coronaPos = [], coronaVel = [];
-        for(var ci = 0; ci < coronaCount; ci++) {
-            var ct = Math.random() * Math.PI * 2;
-            var cp = Math.acos(2 * Math.random() - 1);
-            var cr = 5 + Math.random() * 2;
-            coronaPos.push(cr*Math.sin(cp)*Math.cos(ct), cr*Math.sin(cp)*Math.sin(ct), cr*Math.cos(cp));
-            coronaVel.push(0.02 + Math.random() * 0.05);
-        }
-        coronaGeo.setAttribute('position', new THREE.Float32BufferAttribute(coronaPos, 3));
-        var coronaMat = new THREE.PointsMaterial({color: 0xffcc44, size: 0.3, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending});
-        var coronaMesh = new THREE.Points(coronaGeo, coronaMat);
-        sunMesh.add(coronaMesh);
-        window._corona = {mesh: coronaMesh, vels: coronaVel, count: coronaCount};
 
         function createSaturnRingTexture() {
             // 超高清土星环纹理 4096x4096
             var canvas = document.createElement('canvas');
-            var ringRes = window.innerWidth < 768 ? 2048 : 4096;
-            canvas.width = ringRes;
-            canvas.height = ringRes;
+            canvas.width = 4096;
+            canvas.height = 4096;
             var ctx = canvas.getContext('2d');
             
-            var centerX = ringRes / 2;
-            var centerY = ringRes / 2;
-            var scale = ringRes / 4096;
+            var centerX = 2048;
+            var centerY = 2048;
             
             // F环 (最外层)
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 2048*scale, 0, Math.PI * 2);
-            ctx.arc(centerX, centerY, 1800*scale, 0, Math.PI * 2, true);
+            ctx.arc(centerX, centerY, 2048, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, 1800, 0, Math.PI * 2, true);
             ctx.fillStyle = 'rgba(155,135,100,0.25)';
             ctx.fill();
             
             // Encke缝隙
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 1800*scale, 0, Math.PI * 2);
-            ctx.arc(centerX, centerY, 1790*scale, 0, Math.PI * 2, true);
+            ctx.arc(centerX, centerY, 1800, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, 1790, 0, Math.PI * 2, true);
             ctx.fillStyle = 'rgba(20,15,10,0.1)';
             ctx.fill();
             
             // A环
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 1790*scale, 0, Math.PI * 2);
-            ctx.arc(centerX, centerY, 1240*scale, 0, Math.PI * 2, true);
-            var aGrad = ctx.createRadialGradient(centerX, centerY, 1240*scale, centerX, centerY, 1790*scale);
+            ctx.arc(centerX, centerY, 1790, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, 1240, 0, Math.PI * 2, true);
+            var aGrad = ctx.createRadialGradient(centerX, centerY, 1240, centerX, centerY, 1790);
             aGrad.addColorStop(0, 'rgba(175,150,115,0.6)');
             aGrad.addColorStop(0.3, 'rgba(190,165,125,0.8)');
             aGrad.addColorStop(0.7, 'rgba(185,160,120,0.7)');
@@ -308,16 +236,16 @@
             
             // Cassini 分裂 (最明显的缝隙)
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 1240*scale, 0, Math.PI * 2);
-            ctx.arc(centerX, centerY, 1130*scale, 0, Math.PI * 2, true);
+            ctx.arc(centerX, centerY, 1240, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, 1130, 0, Math.PI * 2, true);
             ctx.fillStyle = 'rgba(30,25,20,0.08)';
             ctx.fill();
             
             // B环 (最亮最宽的主环)
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 1130*scale, 0, Math.PI * 2);
-            ctx.arc(centerX, centerY, 410*scale, 0, Math.PI * 2, true);
-            var bGrad = ctx.createRadialGradient(centerX, centerY, 410*scale, centerX, centerY, 1130*scale);
+            ctx.arc(centerX, centerY, 1130, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, 410, 0, Math.PI * 2, true);
+            var bGrad = ctx.createRadialGradient(centerX, centerY, 410, centerX, centerY, 1130);
             bGrad.addColorStop(0, 'rgba(180,155,120,0.5)');
             bGrad.addColorStop(0.15, 'rgba(200,175,135,0.85)');
             bGrad.addColorStop(0.4, 'rgba(218,195,155,0.95)');
@@ -329,9 +257,9 @@
             
             // C环 (最内层，暗淡)
             ctx.beginPath();
-            ctx.arc(centerX, centerY, 410*scale, 0, Math.PI * 2);
+            ctx.arc(centerX, centerY, 410, 0, Math.PI * 2);
             ctx.arc(centerX, centerY, 0, 0, Math.PI * 2, true);
-            var cGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 410*scale);
+            var cGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 410);
             cGrad.addColorStop(0, 'rgba(100,85,70,0.0)');
             cGrad.addColorStop(0.3, 'rgba(120,100,80,0.15)');
             cGrad.addColorStop(0.7, 'rgba(130,105,85,0.22)');
@@ -341,7 +269,7 @@
             
             // 添加密度波动细节
             for(var i = 0; i < 300; i++){
-                var r = 410*scale + Math.random() * 1380*scale;
+                var r = 410 + Math.random() * 1380;
                 var angle = Math.random() * Math.PI * 2;
                 var x = centerX + Math.cos(angle) * r;
                 var y = centerY + Math.sin(angle) * r;
@@ -351,51 +279,34 @@
                 ctx.fill();
             }
             
-            // 土星环阴影由 Three.js 光照系统自然产生
+            // 添加土星影子 - 半透明的黑色椭圆，模拟土星遮挡阳光
+            // 假设阳光从左侧照过来，影子在右侧
+            var shadowGrad = ctx.createRadialGradient(
+                centerX + 600, centerY, 0,      // 影子中心偏右
+                centerX + 600, centerY, 800     // 影子半径
+            );
+            shadowGrad.addColorStop(0, 'rgba(0,0,0,0.4)');
+            shadowGrad.addColorStop(0.3, 'rgba(0,0,0,0.25)');
+            shadowGrad.addColorStop(0.7, 'rgba(0,0,0,0.1)');
+            shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = shadowGrad;
+            ctx.fillRect(0, 0, 4096, 4096);
             
             return new THREE.CanvasTexture(canvas);
         }
         function createUranusRingTexture() {
             var canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 128;
+            canvas.width = 256; canvas.height = 32;
             var ctx = canvas.getContext('2d');
-            var gradient = ctx.createLinearGradient(0, 0, 1024, 0);
+            var gradient = ctx.createLinearGradient(0, 0, 256, 0);
             gradient.addColorStop(0, 'rgba(136,170,190,0.1)');
             gradient.addColorStop(0.3, 'rgba(136,180,200,0.4)');
             gradient.addColorStop(0.5, 'rgba(150,190,210,0.5)');
             gradient.addColorStop(0.7, 'rgba(130,175,195,0.3)');
             gradient.addColorStop(1, 'rgba(120,160,180,0.1)');
             ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 1024, 128);
+            ctx.fillRect(0, 0, 256, 32);
             return new THREE.CanvasTexture(canvas);
-        }
-
-
-        // 大气层光晕效果
-        function addAtmosphere(parentMesh, r, color) {
-            var atmosGeo = new THREE.SphereGeometry(r * 1.04, 64, 64);
-            var atmosMat = new THREE.ShaderMaterial({
-                uniforms: { glowColor: { value: new THREE.Color(color) } },
-                vertexShader: [
-                    'varying vec3 vNormal;',
-                    'void main() {',
-                    '  vNormal = normalize(normalMatrix * normal);',
-                    '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
-                    '}'
-                ].join('\n'),
-                fragmentShader: [
-                    'uniform vec3 glowColor;',
-                    'varying vec3 vNormal;',
-                    'void main() {',
-                    '  float intensity = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);',
-                    '  gl_FragColor = vec4(glowColor, intensity * 0.8);',
-                    '}'
-                ].join('\n'),
-                side: THREE.BackSide,
-                blending: THREE.AdditiveBlending,
-                transparent: true
-            });
-            parentMesh.add(new THREE.Mesh(atmosGeo, atmosMat));
         }
 
         var texLoader = new THREE.TextureLoader();
@@ -433,9 +344,9 @@
                 
                 var angle = (omega + nu) % (2 * Math.PI);
                 
-                var r0 = a * (1 - e * e) / (1 + e * Math.cos(nu));
+                var r0 = a * (1 - e * e) / (1 + e * Math.cos(angle));
                 var x0 = r0 * Math.cos(angle);
-                var z0 = -r0 * Math.sin(angle);
+                var z0 = r0 * Math.sin(angle);
                 
                 // 纹理
                 var texture = null;
@@ -446,60 +357,17 @@
                     try { texture = texLoader.load('/solar-system/textures/planets/' + d.name + '.jpg?v8k2'); } catch(err) {}
                 }
                 
-                // 气态行星表面不反光，岩石行星稍反光
-                var shininess = (d.name === 'Jupiter' || d.name === 'Saturn' || d.name === 'Uranus' || d.name === 'Neptune') ? 3 : 8;
                 var mat = texture 
-                    ? new THREE.MeshPhongMaterial({map: texture, shininess: shininess})
-                    : new THREE.MeshPhongMaterial({color: d.color || 0x888888, shininess: shininess});
+                    ? new THREE.MeshPhongMaterial({map: texture, shininess: 15})
+                    : new THREE.MeshPhongMaterial({color: d.color || 0x888888, shininess: 15});
                 
                 var pivot = new THREE.Object3D();
-                var segments = (d.name === 'Earth' || d.name === 'Jupiter' || d.name === 'Saturn') ? 96 : 64;
-                var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, segments, segments), mat);
+                var mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat);
                 
-                // 轴倾角设置
+                // 夏至时（地球在-Z位置）北极指向太阳（+Z方向）
                 var axialTilt = (d.axial_tilt || 0) * Math.PI / 180;
-                if(d.name === 'Earth') {
-                    // 地球北极精确方向，确保季节正确
-                    pivot.quaternion.set(-0.203129, 0.000000, 0.000000, 0.979152);
-                } else if(d.name === 'Uranus') {
-                    // 天王星几乎侧翻（97.77度）
-                    pivot.rotation.z = axialTilt;
-                } else {
-                    // 其他行星使用各自的轴倾角
-                    pivot.rotation.z = axialTilt;
-                }
+                pivot.rotation.x = axialTilt;  // 固定方向，公转时相对太阳角度会变化
                 pivot.add(mesh);
-                
-                // 大气层
-                if(d.name === 'Earth') {
-                    addAtmosphere(mesh, radius, 0x4488ff);
-                    // 地球云层
-                    var cloudGeo = new THREE.SphereGeometry(radius * 1.015, 64, 64);
-                    var cloudCanvas = document.createElement('canvas');
-                    cloudCanvas.width = 1024; cloudCanvas.height = 512;
-                    var cloudCtx = cloudCanvas.getContext('2d');
-                    cloudCtx.fillStyle = 'rgba(0,0,0,0)';
-                    cloudCtx.fillRect(0, 0, 1024, 512);
-                    for(var ci = 0; ci < 800; ci++) {
-                        var cx = Math.random() * 1024;
-                        var cy = Math.random() * 512;
-                        var cr = 5 + Math.random() * 40;
-                        var co = 0.1 + Math.random() * 0.25;
-                        cloudCtx.beginPath();
-                        cloudCtx.arc(cx, cy, cr, 0, Math.PI * 2);
-                        cloudCtx.fillStyle = 'rgba(255,255,255,' + co + ')';
-                        cloudCtx.fill();
-                    }
-                    var cloudMat = new THREE.MeshPhongMaterial({
-                        map: new THREE.CanvasTexture(cloudCanvas),
-                        transparent: true, opacity: 0.35, depthWrite: false
-                    });
-                    var cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
-                    cloudMesh.userData = { isCloud: true };
-                    mesh.add(cloudMesh);
-                }
-                if(d.name === 'Venus') addAtmosphere(mesh, radius, 0xffcc66);
-                if(d.name === 'Mars') addAtmosphere(mesh, radius, 0xff6633);
                 
                 // 自转轴指示器（细灰色线）
                 var axisLength = radius * 1.15;
@@ -530,8 +398,8 @@
                 // 土星环、天王星环
                 if(d.name === 'Saturn'){
                     var ring = new THREE.Mesh(
-                        new THREE.RingGeometry(radius*1.3, radius*2.2, 128),
-                        new THREE.MeshBasicMaterial({map:createSaturnRingTexture(), side: THREE.DoubleSide, transparent:true, opacity:0.9})
+                        new THREE.RingGeometry(radius*1.3, radius*2.2, 64),
+                        new THREE.MeshBasicMaterial({map:createSaturnRingTexture(), side:2, transparent:true, opacity:0.9})
                     );
                     ring.rotation.x = Math.PI / 2;
                     mesh.add(ring);
@@ -550,38 +418,35 @@
                     var beijingHour = (currentDate.getUTCHours() + 8 + currentDate.getUTCMinutes()/60 + currentDate.getUTCSeconds()/3600) % 24;
                     var toSun = Math.atan2(-x0, -z0);
                     var rotationFromNoon = (beijingHour - 12) * Math.PI / 12;
-                    var beijingTheta = 206.397 * Math.PI / 180;
+                    var beijingTheta = 206 * Math.PI / 180;
                     mesh.rotation.y = toSun + rotationFromNoon - beijingTheta;
                 }
                 
                 // 木星初始旋转：让大红斑面向太阳
                 if(d.name === 'Jupiter'){
                     var jupiterToSun = Math.atan2(-x0, -z0);
-                    mesh.rotation.y = jupiterToSun;
+                    mesh.rotation.y = 0; // 大红斑面向太阳
                 }
                 
                 // 椭圆轨道线
                 var oPts = [];
-                for(var i = 0; i <= 256; i++){
-                    var theta = i / 256 * Math.PI * 2;
+                for(var i = 0; i <= 128; i++){
+                    var theta = i / 128 * Math.PI * 2;
                     var rOrbit = a * (1 - e * e) / (1 + e * Math.cos(theta));
-                    var oAngle = (omega + theta) % (2 * Math.PI);
-                    var ox = rOrbit * Math.cos(oAngle);
-                    var oz = -rOrbit * Math.sin(oAngle);
+                    var ox = rOrbit * Math.cos(theta);
+                    var oz = rOrbit * Math.sin(theta);
                     oPts.push(new THREE.Vector3(ox, oz * Math.sin(inclination), oz * Math.cos(inclination)));
                 }
-                var orbitLine = new THREE.Line(
+                scene.add(new THREE.Line(
                     new THREE.BufferGeometry().setFromPoints(oPts),
                     new THREE.LineBasicMaterial({color:0x334455, transparent:true, opacity:0.5})
-                );
-                scene.add(orbitLine);
-                orbitLines.push(orbitLine);
+                ));
                 
                 // 标签
                 var label = document.createElement('div');
                 label.textContent = d.name_cn || d.name;
                 label.className = 'planet-label';
-                label.style.cssText='position:absolute;color:rgba(255,255,255,0.7);font-size:15px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transition:background 0.2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transform:translate(-50%,-100%);';
+                label.style.cssText = 'position:absolute;color:rgba(255,255,255,0.7);font-size:12px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transition:background 0.2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;';
                 label.addEventListener('mouseenter', function(){ this.style.background='rgba(255,255,255,0.15)'; this.style.color='#fff'; });
                 label.addEventListener('mouseleave', function(){ this.style.background='none'; this.style.color='rgba(255,255,255,0.7)'; });
                 document.getElementById('canvas-container').appendChild(label);
@@ -591,7 +456,7 @@
                     label.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); startTrack(pivot, mesh, r); });
                 })(pivot, mesh, radius);
                 
-                var planetObj = {
+                planets.push({
                     pivot: pivot,
                     mesh: mesh, 
                     data: d, 
@@ -601,27 +466,15 @@
                     inclination: inclination,
                     label: label,
                     axialTilt: axialTilt
-                };
-                
-                // 冥王星LOD纹理
-                if(d.name === 'Pluto'){
-                    planetObj.lodTextures = {
-                        low: texLoader.load('/solar-system/textures/planets/Pluto_low.jpg'),
-                        mid: texLoader.load('/solar-system/textures/planets/Pluto_mid.jpg'),
-                        high: texLoader.load('/solar-system/textures/planets/Pluto_high.jpg')
-                    };
-                    planetObj.currentLOD = 'mid';
-                }
-                
-                planets.push(planetObj);
+                });
             });
             
             // 月球
             var eP = planets.find(function(p){ return p.data.name === 'Earth'; });
             if(eP){
                 var mMesh = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.27, 64, 64),
-                    new THREE.MeshPhongMaterial({map: texLoader.load('/solar-system/textures/planets/8k_moon.jpg?v8k3'), shininess:3})
+                    new THREE.SphereGeometry(0.27, 16, 16),
+                    new THREE.MeshPhongMaterial({map: texLoader.load('/solar-system/textures/planets/Moon.jpg?v8k2'), shininess:5})
                 );
                 mMesh.userData = { name: 'Moon', name_cn: '月球', radius: 0.27 };
                 scene.add(mMesh);
@@ -630,7 +483,7 @@
                 var moonLabel = document.createElement('div');
                 moonLabel.textContent = '月球';
                 moonLabel.className = 'planet-label';
-                moonLabel.style.cssText='position:absolute;color:rgba(255,255,255,0.7);font-size:12px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transition:background 0.2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transform:translate(-50%,-100%);';
+                moonLabel.style.cssText = 'position:absolute;color:rgba(255,255,255,0.7);font-size:12px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transition:background 0.2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;';
                 moonLabel.addEventListener('mouseenter', function(){ this.style.background='rgba(255,255,255,0.15)'; this.style.color='#fff'; });
                 moonLabel.addEventListener('mouseleave', function(){ this.style.background='none'; this.style.color='rgba(255,255,255,0.7)'; });
                 moonLabel.addEventListener('click', function(e){ e.stopPropagation(); startTrackMoon(mMesh); });
@@ -648,26 +501,16 @@
             }
             
             // 小行星带
-            var aPos = [], aColors = [], aCount = 4000;
+            var aPos = [], aCount = 1500;
             for(var i = 0; i < aCount; i++){
                 var ar = (2.2 + Math.random() * 1.1) * 30 + 10;
                 var at = Math.random() * Math.PI * 2;
-                aPos.push(Math.cos(at)*ar, (Math.random()-0.5)*3, -Math.sin(at)*ar);
+                aPos.push(Math.cos(at)*ar, (Math.random()-0.5)*3, Math.sin(at)*ar);
                 asteroidAngles.push(at);
-                var auDist = ar / 30;
-                asteroidPeriods.push(Math.pow(auDist, 1.5) * 365.25);
-                // 小行星颜色差异：碳质(暗灰)、硅质(偏红)、金属(偏亮)
-                var aColorRand = Math.random();
-                if(aColorRand < 0.5) { aColors.push(0.35, 0.33, 0.3); } // 碳质暗黑
-                else if(aColorRand < 0.8) { aColors.push(0.5, 0.42, 0.35); } // 硅质偏褐
-                else { aColors.push(0.6, 0.58, 0.55); } // 金属偏亮
             }
-            var aGeo = new THREE.BufferGeometry();
-            aGeo.setAttribute('position', new THREE.Float32BufferAttribute(aPos, 3));
-            aGeo.setAttribute('color', new THREE.Float32BufferAttribute(aColors, 3));
             asteroidBelt = new THREE.Points(
-                aGeo,
-                new THREE.PointsMaterial({size:0.3, transparent:true, opacity:0.6, vertexColors:true})
+                new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(aPos, 3)),
+                new THREE.PointsMaterial({color:0x888888, size:0.3, transparent:true, opacity:0.6})
             );
             scene.add(asteroidBelt);
             
@@ -678,20 +521,6 @@
 
         // 视角控制
         function startTrack(targetPivot, targetMesh, radius) {
-            // 跟踪时降低其他轨道线透明度，高亮被跟踪行星的轨道
-            var targetIdx = -1;
-            for(var pi = 0; pi < planets.length; pi++) {
-                if(planets[pi].pivot === targetPivot) { targetIdx = pi; break; }
-            }
-            orbitLines.forEach(function(l, i){
-                if(i === targetIdx) {
-                    l.material.color.set(0x60a5fa);
-                    l.material.opacity = 0.8;
-                } else {
-                    l.material.color.set(0x334455);
-                    l.material.opacity = 0.12;
-                }
-            });
             var pos = targetPivot.position.clone();
             var r = radius || 1;
             var viewDist = r * 5;
@@ -732,11 +561,6 @@
             trackTarget = null;
             trackOffset = null;
             isFlying = false;
-            // 恢复轨道线
-            orbitLines.forEach(function(l){
-                l.material.color.set(0x334455);
-                l.material.opacity = 0.5;
-            });
             document.getElementById('info-panel').style.display = 'none';
         }
         
@@ -815,7 +639,7 @@
                 var minute = parseInt(document.getElementById('minute-input').value);
                 var second = parseInt(document.getElementById('second-input').value);
                 
-                simTime = Date.UTC(year, month, day, hour, minute, second);
+                simTime = new Date(year, month, day, hour, minute, second).getTime();
                 lastRealTime = Date.now();
                 updatePlanetsPosition(simTime);
                 updateTimeDisplay();
@@ -939,10 +763,13 @@
         
         // 更新模拟时间
         if(!paused) {
+            // speedMultiplier = 模拟秒/真实秒
+            // realElapsed 毫秒 * speedMultiplier = 模拟毫秒
             simTime += realElapsed * speedMultiplier;
             updateTimeDisplay();
         }
         
+        // 暂停时所有动画都停止
         var dt_seconds = paused ? 0 : realElapsed * speedMultiplier / 1000;
         var dt_days = dt_seconds / 86400;
         
@@ -952,70 +779,41 @@
             sunMesh.rotation.y += dt_days / sunRotationPeriod * 2 * Math.PI;
             sunPulse += dt_days * 0.5;
             sunMesh.scale.setScalar(1 + Math.sin(sunPulse) * 0.02);
-            
-            // 日冕粒子更新
-            if(window._corona) {
-                var cp = window._corona.mesh.geometry.attributes.position.array;
-                for(var ci = 0; ci < window._corona.count; ci++) {
-                    var cx = cp[ci*3], cy = cp[ci*3+1], cz = cp[ci*3+2];
-                    var cd = Math.sqrt(cx*cx + cy*cy + cz*cz);
-                    cp[ci*3] += (cx/cd) * window._corona.vels[ci];
-                    cp[ci*3+1] += (cy/cd) * window._corona.vels[ci];
-                    cp[ci*3+2] += (cz/cd) * window._corona.vels[ci];
-                    if(cd > 12) {
-                        var ct = Math.random() * Math.PI * 2;
-                        var cpp = Math.acos(2 * Math.random() - 1);
-                        cp[ci*3] = 5.2 * Math.sin(cpp) * Math.cos(ct);
-                        cp[ci*3+1] = 5.2 * Math.sin(cpp) * Math.sin(ct);
-                        cp[ci*3+2] = 5.2 * Math.cos(cpp);
-                    }
-                }
-                window._corona.mesh.geometry.attributes.position.needsUpdate = true;
-            }
         }
         
-        // 统一用开普勒方程更新所有行星位置（含地球自转）
-        if(!paused) {
-            updatePlanetsPosition(simTime);
-            
-            // 非地球行星自转（地球自转已在updatePlanetsPosition中精确处理）
-            planets.forEach(function(p){
-                if(p.data.name !== 'Earth') {
-                    var rotationPeriod = p.data.rotation_period || 1;
-                    var rotationDir = rotationPeriod < 0 ? -1 : 1;
-                    p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
-                } else {
-                    // 地球云层缓慢旋转（比地球自转慢）
-                    var cloud = p.mesh.getObjectByProperty('isCloud', true);
-                    if(cloud) cloud.rotation.y += dt_days * 0.3 * 2 * Math.PI;
-                }
-            });
-        }
-        
-        // 月球（使用updatePlanetsPosition中计算的moon.angle）
+        // 月球
         if(moon){
-            var moonIncl = 5.14 * Math.PI / 180;
+            moon.angle += dt_days / 27.3 * 2 * Math.PI;
             moon.mesh.position.x = moon.earth.pivot.position.x + Math.cos(moon.angle) * moon.dist;
-            moon.mesh.position.y = moon.earth.pivot.position.y + Math.sin(moon.angle) * Math.sin(moonIncl) * moon.dist;
-            moon.mesh.position.z = moon.earth.pivot.position.z + Math.sin(moon.angle) * Math.cos(moonIncl) * moon.dist;
+            moon.mesh.position.z = moon.earth.pivot.position.z + Math.sin(moon.angle) * moon.dist;
             moon.mesh.rotation.y = moon.angle;
         }
         
-        // 小行星带（每3帧更新一次以节省性能）
-        if(asteroidBelt && !paused){
-            if(!window._asteroidFrame) window._asteroidFrame = 0;
-            window._asteroidFrame++;
-            if(window._asteroidFrame % 3 === 0) {
-                var positions = asteroidBelt.geometry.attributes.position.array;
-                var aDt = dt_days * 3;
-                for(var i = 0; i < asteroidAngles.length; i++){
-                    asteroidAngles[i] += aDt / asteroidPeriods[i] * 2 * Math.PI;
-                    var dist = Math.sqrt(positions[i*3]*positions[i*3] + positions[i*3+2]*positions[i*3+2]);
-                    positions[i*3] = Math.cos(asteroidAngles[i]) * dist;
-                    positions[i*3+2] = -Math.sin(asteroidAngles[i]) * dist;
-                }
-                asteroidBelt.geometry.attributes.position.needsUpdate = true;
+        // 行星公转和自转
+        planets.forEach(function(p){
+            p.angle += dt_days / p.data.orbital_period * 2 * Math.PI;
+            var r = p.a * (1 - p.e * p.e) / (1 + p.e * Math.cos(p.angle));
+            var x = r * Math.cos(p.angle);
+            var z = r * Math.sin(p.angle);
+            p.pivot.position.set(x, z * Math.sin(p.inclination), z * Math.cos(p.inclination));
+            
+            var rotationPeriod = p.data.rotation_period || 1;
+            var rotationDir = rotationPeriod < 0 ? -1 : 1;
+            p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
+            
+            
+        });
+        
+        // 小行星带
+        if(asteroidBelt){
+            var positions = asteroidBelt.geometry.attributes.position.array;
+            for(var i = 0; i < asteroidAngles.length; i++){
+                asteroidAngles[i] += dt_days / 1642.5 * 2 * Math.PI;
+                var dist = Math.sqrt(positions[i*3]*positions[i*3] + positions[i*3+2]*positions[i*3+2]);
+                positions[i*3] = Math.cos(asteroidAngles[i]) * dist;
+                positions[i*3+2] = Math.sin(asteroidAngles[i]) * dist;
             }
+            asteroidBelt.geometry.attributes.position.needsUpdate = true;
         }
         
         // 飞行动画
@@ -1036,45 +834,21 @@
             controls.target.copy(targetPos);
         }
         
-        // 标签（根据距离调整透明度和大小）
+        // 标签
         planets.forEach(function(p){
             if(p.label){
                 var v = p.pivot.position.clone();
                 v.y += p.mesh.geometry.parameters.radius + 0.5;
                 v.project(camera);
                 if(v.z < 1){
-                    var dist = camera.position.distanceTo(p.pivot.position);
-                    var opacity = Math.max(0.3, Math.min(1, 50 / dist));
-                    var scale = Math.max(0.7, Math.min(1.2, 30 / dist));
                     p.label.style.display = 'block';
                     p.label.style.left = ((v.x * 0.5 + 0.5) * window.innerWidth) + 'px';
                     p.label.style.top = ((-v.y * 0.5 + 0.5) * window.innerHeight) + 'px';
-                    p.label.style.opacity = opacity;
-                    // fixed font size for planets (no scaling)
-                    // 冥王星LOD纹理切换
-                    if(p.lodTextures){
-                        var newLOD = dist > 80 ? 'low' : (dist > 20 ? 'mid' : 'high');
-                        if(newLOD !== p.currentLOD){
-                            p.mesh.material.map = p.lodTextures[newLOD];
-                            p.mesh.material.needsUpdate = true;
-                            p.currentLOD = newLOD;
-                        }
-                    }
                 } else {
                     p.label.style.display = 'none';
                 }
             }
         });
-        
-        // 太阳标签位置
-        if(sunLabel){
-            var sv = new THREE.Vector3(0, 6, 0).project(camera);
-            if(sv.z < 1){
-                sunLabel.style.display='block';
-                sunLabel.style.left=((sv.x*0.5+0.5)*window.innerWidth)+'px';
-                sunLabel.style.top=((-sv.y*0.5+0.5)*window.innerHeight)+'px';
-            } else { sunLabel.style.display='none'; }
-        }
         
         // 月球标签位置更新
         if(moon && moon.label){
@@ -1082,13 +856,9 @@
             mv.y += 0.5;
             mv.project(camera);
             if(mv.z < 1){
-                var moonDist = camera.position.distanceTo(moon.earth.pivot.position);
-                var moonScale = Math.max(0.7, Math.min(1.2, 30 / moonDist));
                 moon.label.style.display = 'block';
                 moon.label.style.left = ((mv.x * 0.5 + 0.5) * window.innerWidth) + 'px';
                 moon.label.style.top = ((-mv.y * 0.5 + 0.5) * window.innerHeight) + 'px';
-                moon.label.style.fontSize = (12 * moonScale) + 'px';
-                moon.label.style.opacity = Math.max(0.3, Math.min(1, 50 / moonDist));
             } else {
                 moon.label.style.display = 'none';
             }
