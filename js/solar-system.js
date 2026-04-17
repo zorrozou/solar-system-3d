@@ -441,7 +441,7 @@
                 var texture = null;
                 // 地球使用高清纹理
                 if(d.name === 'Earth') {
-                    try { texture = texLoader.load('/solar-system/textures/planets/Earth-HD.jpg?v8k2'); } catch(err) {}
+                    try { texture = texLoader.load('/solar-system/textures/planets/Earth_mid.jpg'); } catch(err) {}
                 } else {
                     try { texture = texLoader.load('/solar-system/textures/planets/' + d.name + '.jpg?v8k2'); } catch(err) {}
                 }
@@ -609,6 +609,15 @@
                         low: texLoader.load('/solar-system/textures/planets/Pluto_low.jpg'),
                         mid: texLoader.load('/solar-system/textures/planets/Pluto_mid.jpg'),
                         high: texLoader.load('/solar-system/textures/planets/Pluto_high.jpg')
+                    };
+                    planetObj.currentLOD = 'mid';
+                }
+                // 地球LOD纹理
+                if(d.name === 'Earth'){
+                    planetObj.lodTextures = {
+                        low: texLoader.load('/solar-system/textures/planets/Earth_low.jpg'),
+                        mid: texLoader.load('/solar-system/textures/planets/Earth_mid.jpg'),
+                        high: texLoader.load('/solar-system/textures/planets/Earth_high.jpg')
                     };
                     planetObj.currentLOD = 'mid';
                 }
