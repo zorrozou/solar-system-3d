@@ -29,6 +29,15 @@ reduce_*.js
 debug_*.js
 test_*.js
 
+# 备份文件
+*.backup
+*.bak*
+*.bak.*
+
+# 外部备份目录
+*.bak.????????/
+*.bak.??????/
+
 # 其他
 node_modules/
 *.log
