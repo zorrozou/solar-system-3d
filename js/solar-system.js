@@ -10,6 +10,10 @@
     var asteroidBelt = null;
     var asteroidAngles = [];
     var asteroidPeriods = [];
+    var asteroidDists = [];    // 预计算轨道半径，避免每3帧 sqrt
+    var earthPlanet = null;  // 缓存地球引用，避免 O(n) 扫描
+    var frameCount = 0;       // 帧计数器，用于间隔优化
+    var lastTrackTime = 0;    // 防止移动端 touch+click 双击
     
     // 精确的模拟时间（毫秒级）
     var simTime = Date.now();  // 模拟时间的毫秒时间戳
@@ -30,10 +34,15 @@
     var flyEnd = null;
     var flyProgress = 0;
 
+    // 天文学常量
+    var J2000_MS = Date.UTC(2000, 0, 1, 12, 0, 0);
+    var NEW_MOON_REF_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
+    var SYNODIC_MONTH = 29.530588;
+    var MOON_INCLINATION = 5.14 * Math.PI / 180;
+
     // 计算从J2000.0到指定日期的天数
     function daysSinceJ2000(date) {
-        var j2000 = Date.UTC(2000, 0, 1, 12, 0, 0);
-        return (date - j2000) / (1000 * 60 * 60 * 24);
+        return (date - J2000_MS) / (1000 * 60 * 60 * 24);
     }
 
     // 格式化时间显示
@@ -124,13 +133,10 @@
         
         // 更新月球位置
         if(moon) {
-            var newMoonRef = Date.UTC(2000, 0, 6, 18, 14, 0);
-            var daysSinceNew = (date - newMoonRef) / (1000 * 60 * 60 * 24);
-            var synodicMonth = 29.530588;
-            var moonPhase = (daysSinceNew % synodicMonth) / synodicMonth;
+            var daysSinceNew = (date - NEW_MOON_REF_MS) / (1000 * 60 * 60 * 24);
+            var moonPhase = (daysSinceNew % SYNODIC_MONTH) / SYNODIC_MONTH;
             
-            var earthAngle = planets.find(function(p){ return p.data.name === 'Earth'; }).angle;
-            var sunLongitude = earthAngle + Math.PI;
+            var sunLongitude = earthPlanet ? earthPlanet.angle + Math.PI : Math.PI;
             moon.angle = sunLongitude + moonPhase * 2 * Math.PI;
         }
     }
@@ -406,6 +412,7 @@
 
         // 加载行星数据
         fetch('/solar-system/api/planets.php').then(function(r){return r.json();}).then(function(data){
+            var labelFragment = document.createDocumentFragment();
             data.forEach(function(d){
                 // 轨道参数
                 var a = d.distance_from_sun * 30 + 10;
@@ -439,11 +446,11 @@
                 
                 // 纹理
                 var texture = null;
-                // 地球使用高清纹理
+                // 地球使用高清纹理（TextureLoader.load 是异步的，无需 try/catch）
                 if(d.name === 'Earth') {
-                    try { texture = texLoader.load('/solar-system/textures/planets/Earth_mid.jpg'); } catch(err) {}
+                    texture = texLoader.load('/solar-system/textures/planets/Earth_mid.jpg');
                 } else {
-                    try { texture = texLoader.load('/solar-system/textures/planets/' + d.name + '.jpg?v8k2'); } catch(err) {}
+                    texture = texLoader.load('/solar-system/textures/planets/' + d.name + '.jpg?v8k2');
                 }
                 
                 // 气态行星表面不反光，岩石行星稍反光
@@ -584,11 +591,11 @@
                 label.style.cssText='position:absolute;color:rgba(255,255,255,0.7);font-size:15px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transition:background 0.2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transform:translate(-50%,-100%);';
                 label.addEventListener('mouseenter', function(){ this.style.background='rgba(255,255,255,0.15)'; this.style.color='#fff'; });
                 label.addEventListener('mouseleave', function(){ this.style.background='none'; this.style.color='rgba(255,255,255,0.7)'; });
-                document.getElementById('canvas-container').appendChild(label);
+                labelFragment.appendChild(label);
                 
                 (function(pivot, mesh, r){
-                    label.addEventListener('click', function(e){ e.stopPropagation(); startTrack(pivot, mesh, r); });
-                    label.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); startTrack(pivot, mesh, r); });
+                    label.addEventListener('click', function(e){ if(Date.now()-lastTrackTime<250)return;lastTrackTime=Date.now();e.stopPropagation();startTrack(pivot,mesh,r); });
+                    label.addEventListener('touchend', function(e){ if(Date.now()-lastTrackTime<250)return;lastTrackTime=Date.now();e.preventDefault();e.stopPropagation();startTrack(pivot,mesh,r); });
                 })(pivot, mesh, radius);
                 
                 var planetObj = {
@@ -623,11 +630,12 @@
                 }
                 
                 planets.push(planetObj);
+                if(d.name === 'Earth') earthPlanet = planetObj;
             });
+            document.getElementById('canvas-container').appendChild(labelFragment);
             
             // 月球
-            var eP = planets.find(function(p){ return p.data.name === 'Earth'; });
-            if(eP){
+            if(earthPlanet){
                 var mMesh = new THREE.Mesh(
                     new THREE.SphereGeometry(0.27, 64, 64),
                     new THREE.MeshPhongMaterial({map: texLoader.load('/solar-system/textures/planets/8k_moon.jpg?v8k3'), shininess:3})
@@ -642,18 +650,16 @@
                 moonLabel.style.cssText='position:absolute;color:rgba(255,255,255,0.7);font-size:12px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transition:background 0.2s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;transform:translate(-50%,-100%);';
                 moonLabel.addEventListener('mouseenter', function(){ this.style.background='rgba(255,255,255,0.15)'; this.style.color='#fff'; });
                 moonLabel.addEventListener('mouseleave', function(){ this.style.background='none'; this.style.color='rgba(255,255,255,0.7)'; });
-                moonLabel.addEventListener('click', function(e){ e.stopPropagation(); startTrackMoon(mMesh); });
-                moonLabel.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); startTrackMoon(mMesh); });
+                moonLabel.addEventListener('click', function(e){ if(Date.now()-lastTrackTime<250)return;lastTrackTime=Date.now();e.stopPropagation();startTrackMoon(mMesh); });
+                moonLabel.addEventListener('touchend', function(e){ if(Date.now()-lastTrackTime<250)return;lastTrackTime=Date.now();e.preventDefault();e.stopPropagation();startTrackMoon(mMesh); });
                 document.getElementById('canvas-container').appendChild(moonLabel);
                 
-                var newMoonRef = Date.UTC(2000, 0, 6, 18, 14, 0);
-                var daysSinceNew = (simTime - newMoonRef) / (1000 * 60 * 60 * 24);
-                var synodicMonth = 29.530588;
-                var moonPhase = (daysSinceNew % synodicMonth) / synodicMonth;
-                var sunLongitude = eP.angle + Math.PI;
+                var daysSinceNew = (simTime - NEW_MOON_REF_MS) / (1000 * 60 * 60 * 24);
+                var moonPhase = (daysSinceNew % SYNODIC_MONTH) / SYNODIC_MONTH;
+                var sunLongitude = earthPlanet.angle + Math.PI;
                 var moonInitAngle = sunLongitude + moonPhase * 2 * Math.PI;
                 
-                moon = {mesh:mMesh, earth:eP, angle:moonInitAngle, dist:4, label:moonLabel};
+                moon = {mesh:mMesh, earth:earthPlanet, angle:moonInitAngle, dist:4, label:moonLabel};
             }
             
             // 小行星带
@@ -670,6 +676,7 @@
                 if(aColorRand < 0.5) { aColors.push(0.35, 0.33, 0.3); } // 碳质暗黑
                 else if(aColorRand < 0.8) { aColors.push(0.5, 0.42, 0.35); } // 硅质偏褐
                 else { aColors.push(0.6, 0.58, 0.55); } // 金属偏亮
+                asteroidDists.push(ar);  // 预计算轨道半径
             }
             var aGeo = new THREE.BufferGeometry();
             aGeo.setAttribute('position', new THREE.Float32BufferAttribute(aPos, 3));
@@ -741,6 +748,7 @@
             trackTarget = null;
             trackOffset = null;
             isFlying = false;
+            controls.minDistance = 5;  // 恢复最小缩放距离
             // 恢复轨道线
             orbitLines.forEach(function(l){
                 l.material.color.set(0x334455);
@@ -873,65 +881,42 @@
             }
         });
 
-        // 点击/拖动检测
-        var mouseDownPos = null;
-        var isMouseDrag = false;
+        // 点击/拖动检测（Pointer Events 统一鼠标和触摸）
+        var downPos = null;
+        var isDrag = false;
+        var DRAG_THRESHOLD = 5;
         
-        renderer.domElement.addEventListener('mousedown', function(e){
-            mouseDownPos = {x: e.clientX, y: e.clientY};
-            isMouseDrag = false;
+        renderer.domElement.addEventListener('pointerdown', function(e){
+            downPos = {x: e.clientX, y: e.clientY};
+            isDrag = false;
         });
         
-        renderer.domElement.addEventListener('mousemove', function(e){
-            if(mouseDownPos){
-                var dx = e.clientX - mouseDownPos.x;
-                var dy = e.clientY - mouseDownPos.y;
-                if(Math.sqrt(dx*dx + dy*dy) > 5){
-                    isMouseDrag = true;
+        renderer.domElement.addEventListener('pointermove', function(e){
+            if(downPos){
+                var dx = e.clientX - downPos.x;
+                var dy = e.clientY - downPos.y;
+                if(Math.sqrt(dx*dx + dy*dy) > DRAG_THRESHOLD){
+                    isDrag = true;
                 }
             }
         });
         
-        renderer.domElement.addEventListener('mouseup', function(e){
-            if(!isMouseDrag && trackTarget){
+        renderer.domElement.addEventListener('pointerup', function(e){
+            if(!isDrag && trackTarget){
                 stopTrack();
             }
-            mouseDownPos = null;
-            isMouseDrag = false;
-        });
-        
-        var touchDownPos = null;
-        var isTouchDrag = false;
-        
-        renderer.domElement.addEventListener('touchstart', function(e){
-            if(e.touches.length === 1){
-                touchDownPos = {x: e.touches[0].clientX, y: e.touches[0].clientY};
-                isTouchDrag = false;
-            }
-        });
-        
-        renderer.domElement.addEventListener('touchmove', function(e){
-            if(touchDownPos && e.touches.length === 1){
-                var dx = e.touches[0].clientX - touchDownPos.x;
-                var dy = e.touches[0].clientY - touchDownPos.y;
-                if(Math.sqrt(dx*dx + dy*dy) > 10){
-                    isTouchDrag = true;
-                }
-            }
-        });
-        
-        renderer.domElement.addEventListener('touchend', function(e){
-            if(!isTouchDrag && trackTarget){
-                stopTrack();
-            }
-            touchDownPos = null;
-            isTouchDrag = false;
+            downPos = null;
+            isDrag = false;
         });
 
+        var resizeTimer = null;
         window.addEventListener('resize', function(){
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            if(resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function(){
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }, 150);  // 150ms debounce
         });
         
         animate();
@@ -944,6 +929,7 @@
         // 计算真实时间流逝
         var realNow = Date.now();
         var realElapsed = realNow - lastRealTime;  // 毫秒
+        if(realElapsed > 2000) realElapsed = 2000;  // delta cap: 防止切标签页回来模拟跳变
         lastRealTime = realNow;
         
         // 更新模拟时间
@@ -962,8 +948,8 @@
             sunPulse += dt_days * 0.5;
             sunMesh.scale.setScalar(1 + Math.sin(sunPulse) * 0.02);
             
-            // 日冕粒子更新
-            if(window._corona) {
+            // 日冕粒子更新（暂停时跳过）
+            if(window._corona && !paused) {
                 var cp = window._corona.mesh.geometry.attributes.position.array;
                 for(var ci = 0; ci < window._corona.count; ci++) {
                     var cx = cp[ci*3], cy = cp[ci*3+1], cz = cp[ci*3+2];
@@ -1003,10 +989,9 @@
         
         // 月球（使用updatePlanetsPosition中计算的moon.angle）
         if(moon){
-            var moonIncl = 5.14 * Math.PI / 180;
             moon.mesh.position.x = moon.earth.pivot.position.x + Math.cos(moon.angle) * moon.dist;
-            moon.mesh.position.y = moon.earth.pivot.position.y + Math.sin(moon.angle) * Math.sin(moonIncl) * moon.dist;
-            moon.mesh.position.z = moon.earth.pivot.position.z + Math.sin(moon.angle) * Math.cos(moonIncl) * moon.dist;
+            moon.mesh.position.y = moon.earth.pivot.position.y + Math.sin(moon.angle) * Math.sin(MOON_INCLINATION) * moon.dist;
+            moon.mesh.position.z = moon.earth.pivot.position.z + Math.sin(moon.angle) * Math.cos(MOON_INCLINATION) * moon.dist;
             moon.mesh.rotation.y = moon.angle;
         }
         
@@ -1019,9 +1004,8 @@
                 var aDt = dt_days * 3;
                 for(var i = 0; i < asteroidAngles.length; i++){
                     asteroidAngles[i] += aDt / asteroidPeriods[i] * 2 * Math.PI;
-                    var dist = Math.sqrt(positions[i*3]*positions[i*3] + positions[i*3+2]*positions[i*3+2]);
-                    positions[i*3] = Math.cos(asteroidAngles[i]) * dist;
-                    positions[i*3+2] = -Math.sin(asteroidAngles[i]) * dist;
+                    positions[i*3] = Math.cos(asteroidAngles[i]) * asteroidDists[i];
+                    positions[i*3+2] = -Math.sin(asteroidAngles[i]) * asteroidDists[i];
                 }
                 asteroidBelt.geometry.attributes.position.needsUpdate = true;
             }
@@ -1045,66 +1029,69 @@
             controls.target.copy(targetPos);
         }
         
-        // 标签（根据距离调整透明度和大小）
-        planets.forEach(function(p){
-            if(p.label){
-                var v = p.pivot.position.clone();
-                v.y += p.mesh.geometry.parameters.radius + 0.5;
-                v.project(camera);
-                if(v.z < 1){
-                    var dist = camera.position.distanceTo(p.pivot.position);
-                    var opacity = Math.max(0.3, Math.min(1, 50 / dist));
-                    var scale = Math.max(0.7, Math.min(1.2, 30 / dist));
-                    p.label.style.display = 'block';
-                    p.label.style.left = ((v.x * 0.5 + 0.5) * window.innerWidth) + 'px';
-                    p.label.style.top = ((-v.y * 0.5 + 0.5) * window.innerHeight) + 'px';
-                    p.label.style.opacity = opacity;
-                    // fixed font size for planets (no scaling)
-                    // 冥王星LOD纹理切换
-                    if(p.lodTextures){
-                        var newLOD = dist > 80 ? 'low' : (dist > 20 ? 'mid' : 'high');
-                        if(newLOD !== p.currentLOD){
-                            p.mesh.material.map = p.lodTextures[newLOD];
-                            p.mesh.material.needsUpdate = true;
-                            p.currentLOD = newLOD;
+        // 标签投影+位置更新（每3帧）
+        var updateLabels = (frameCount % 3 === 0);
+        if(updateLabels){
+            planets.forEach(function(p){
+                if(p.label){
+                    var v = p.pivot.position.clone();
+                    v.y += p.mesh.geometry.parameters.radius + 0.5;
+                    v.project(camera);
+                    if(v.z < 1){
+                        var dist = camera.position.distanceTo(p.pivot.position);
+                        var opacity = Math.max(0.3, Math.min(1, 50 / dist));
+                        var scale = Math.max(0.7, Math.min(1.2, 30 / dist));
+                        p.label.style.display = 'block';
+                        p.label.style.left = ((v.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+                        p.label.style.top = ((-v.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+                        p.label.style.opacity = opacity;
+                        // 冥王星LOD纹理切换
+                        if(p.lodTextures){
+                            var newLOD = dist > 80 ? 'low' : (dist > 20 ? 'mid' : 'high');
+                            if(newLOD !== p.currentLOD){
+                                p.mesh.material.map = p.lodTextures[newLOD];
+                                p.mesh.material.needsUpdate = true;
+                                p.currentLOD = newLOD;
+                            }
                         }
+                    } else {
+                        p.label.style.display = 'none';
                     }
+                }
+            });
+            
+            // 太阳标签位置
+            if(sunLabel){
+                var sv = new THREE.Vector3(0, 6, 0).project(camera);
+                if(sv.z < 1){
+                    sunLabel.style.display='block';
+                    sunLabel.style.left=((sv.x*0.5+0.5)*window.innerWidth)+'px';
+                    sunLabel.style.top=((-sv.y*0.5+0.5)*window.innerHeight)+'px';
+                } else { sunLabel.style.display='none'; }
+            }
+            
+            // 月球标签位置更新
+            if(moon && moon.label){
+                var mv = moon.mesh.position.clone();
+                mv.y += 0.5;
+                mv.project(camera);
+                if(mv.z < 1){
+                    var moonDist = camera.position.distanceTo(moon.earth.pivot.position);
+                    var moonScale = Math.max(0.7, Math.min(1.2, 30 / moonDist));
+                    moon.label.style.display = 'block';
+                    moon.label.style.left = ((mv.x * 0.5 + 0.5) * window.innerWidth) + 'px';
+                    moon.label.style.top = ((-mv.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+                    moon.label.style.fontSize = (12 * moonScale) + 'px';
+                    moon.label.style.opacity = Math.max(0.3, Math.min(1, 50 / moonDist));
                 } else {
-                    p.label.style.display = 'none';
+                    moon.label.style.display = 'none';
                 }
             }
-        });
-        
-        // 太阳标签位置
-        if(sunLabel){
-            var sv = new THREE.Vector3(0, 6, 0).project(camera);
-            if(sv.z < 1){
-                sunLabel.style.display='block';
-                sunLabel.style.left=((sv.x*0.5+0.5)*window.innerWidth)+'px';
-                sunLabel.style.top=((-sv.y*0.5+0.5)*window.innerHeight)+'px';
-            } else { sunLabel.style.display='none'; }
         }
-        
-        // 月球标签位置更新
-        if(moon && moon.label){
-            var mv = moon.mesh.position.clone();
-            mv.y += 0.5;
-            mv.project(camera);
-            if(mv.z < 1){
-                var moonDist = camera.position.distanceTo(moon.earth.pivot.position);
-                var moonScale = Math.max(0.7, Math.min(1.2, 30 / moonDist));
-                moon.label.style.display = 'block';
-                moon.label.style.left = ((mv.x * 0.5 + 0.5) * window.innerWidth) + 'px';
-                moon.label.style.top = ((-mv.y * 0.5 + 0.5) * window.innerHeight) + 'px';
-                moon.label.style.fontSize = (12 * moonScale) + 'px';
-                moon.label.style.opacity = Math.max(0.3, Math.min(1, 50 / moonDist));
-            } else {
-                moon.label.style.display = 'none';
-            }
-        }
-        
+
         controls.update();
         renderer.render(scene, camera);
+        frameCount++;
     }
 
     if (typeof window !== 'undefined' && typeof THREE !== 'undefined') { window.THREE = THREE; }
