@@ -480,30 +480,6 @@
                 // 大气层
                 if(d.name === 'Earth') {
                     addAtmosphere(mesh, radius, 0x4488ff);
-                    // 地球云层
-                    var cloudGeo = new THREE.SphereGeometry(radius * 1.015, 64, 64);
-                    var cloudCanvas = document.createElement('canvas');
-                    cloudCanvas.width = 1024; cloudCanvas.height = 512;
-                    var cloudCtx = cloudCanvas.getContext('2d');
-                    cloudCtx.fillStyle = 'rgba(0,0,0,0)';
-                    cloudCtx.fillRect(0, 0, 1024, 512);
-                    for(var ci = 0; ci < 800; ci++) {
-                        var cx = Math.random() * 1024;
-                        var cy = Math.random() * 512;
-                        var cr = 5 + Math.random() * 40;
-                        var co = 0.1 + Math.random() * 0.25;
-                        cloudCtx.beginPath();
-                        cloudCtx.arc(cx, cy, cr, 0, Math.PI * 2);
-                        cloudCtx.fillStyle = 'rgba(255,255,255,' + co + ')';
-                        cloudCtx.fill();
-                    }
-                    var cloudMat = new THREE.MeshPhongMaterial({
-                        map: new THREE.CanvasTexture(cloudCanvas),
-                        transparent: true, opacity: 0.35, depthWrite: false
-                    });
-                    var cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
-                    cloudMesh.userData = { isCloud: true };
-                    mesh.add(cloudMesh);
                 }
                 if(d.name === 'Venus') addAtmosphere(mesh, radius, 0xffcc66);
                 if(d.name === 'Mars') addAtmosphere(mesh, radius, 0xff6633);
@@ -980,9 +956,8 @@
                     var rotationDir = rotationPeriod < 0 ? -1 : 1;
                     p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
                 } else {
-                    // 地球云层缓慢旋转（比地球自转慢）
-                    var cloud = p.mesh.getObjectByProperty('isCloud', true);
-                    if(cloud) cloud.rotation.y += dt_days * 0.3 * 2 * Math.PI;
+                    // 地球表面自转
+                    p.mesh.rotation.y += dt_days * 1.0 * 2 * Math.PI;
                 }
             });
         }
