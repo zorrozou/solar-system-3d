@@ -137,8 +137,13 @@
         空格:暂停 | ←→:切换档位 | R:当前时间 | ESC:退出跟踪
     </div>
 
-    <script src="lib/three.min.js"></script>
-    <script src="lib/OrbitControls.js"></script>
-    <script src="js/solar-system.js?v=5.1.0"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/solar-system/lib/three.module.js"
+        }
+    }
+    </script>
+    <script type="module" src="/solar-system/js/main.js?v=6.0.0"></script>
 </body>
 </html>
