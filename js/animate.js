@@ -59,14 +59,10 @@ export function animate() {
 
         // 非地球行星自转（地球已在 updatePlanetsPosition 中精确处理）
         STATE.planets.forEach(function (p) {
-            if (p.data.name !== 'Earth') {
-                const rotationPeriod = p.data.rotation_period || 1;
-                const rotationDir = rotationPeriod < 0 ? -1 : 1;
-                p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
-            } else {
-                // 地球表面附加自转（叠在精确朝向之上）
-                p.mesh.rotation.y += dt_days * 1.0 * 2 * Math.PI;
-            }
+            if (p.data.name === 'Earth') return;
+            const rotationPeriod = p.data.rotation_period || 1;
+            const rotationDir = rotationPeriod < 0 ? -1 : 1;
+            p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
         });
     }
 

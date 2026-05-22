@@ -335,6 +335,53 @@ gl_FragColor = vec4(linearColor, intensity * 0.8);
 
 ---
 
+### 5.6 顺手修了一个 IIFE 时代的地球自转化石 bug
+
+升级到 r170 验证完之后，复盘代码时发现 `animate.js` 的主循环里有一段化石代码：
+
+```js
+// 修复前
+STATE.planets.forEach(function (p) {
+    if (p.data.name !== 'Earth') {
+        const rotationPeriod = p.data.rotation_period || 1;
+        const rotationDir = rotationPeriod < 0 ? -1 : 1;
+        p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
+    } else {
+        // 地球表面附加自转（叠在精确朝向之上）  ← 这段是化石
+        p.mesh.rotation.y += dt_days * 1.0 * 2 * Math.PI;
+    }
+});
+```
+
+**为什么是 bug 而不是无害的死代码**：
+
+执行顺序上，`updatePlanetsPosition()` 用 `=` 把 `earth.rotation.y` 覆盖为精确朝向，然后这个 forEach 又用 `+=` 在精确朝向上叠了 `dt_days * 2π`。同帧渲染时**确实读到了带 += 的值**（不是无效），但这个 += 的量是相对于一帧时间步长的相位偏移：
+
+| 速度档 | 偏移角 | 视觉感知 |
+|---|---|---|
+| 1 秒 = 1 秒 | 0.00007° | 看不到 |
+| 1 秒 = 1 天 | 6° | 隐约能看到 |
+| 1 秒 = 1 月 | 180° | 地球反着面对太阳 |
+| 1 秒 = 1 年 | 40° | 朝向明显错 |
+
+也就是**速度档越高，地球朝向偏离精确算法越远**——在原 IIFE 时代写的时候大概是先有 += 实现地球自转，后来加 `updatePlanetsPosition` 里的精确算法但忘了删旧的 +=。
+
+**修法**：直接 early return 掉地球分支，让 `updatePlanetsPosition` 唯一负责地球自转：
+
+```js
+// 修复后
+STATE.planets.forEach(function (p) {
+    if (p.data.name === 'Earth') return;
+    const rotationPeriod = p.data.rotation_period || 1;
+    const rotationDir = rotationPeriod < 0 ? -1 : 1;
+    p.mesh.rotation.y += rotationDir * dt_days / Math.abs(rotationPeriod) * 2 * Math.PI;
+});
+```
+
+**回归验证**：把速度滑块拉到"1 秒 = 1 月"跟踪地球，修复前能看到地球反面对着太阳；修复后白天面与精确算法（北京经度对齐反太阳方向 + 时区时差）一致。
+
+---
+
 ## 6. 后续待办（按优先级）
 
 按之前评估时的 P0-P4 分级，这次只做了 P0 的 #1 和 P3 的 #15，其余都还在。下次开工时按这个列表选。
