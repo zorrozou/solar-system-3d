@@ -11,8 +11,18 @@ import {
 } from './factories.js';
 import { startTrack, startTrackMoon } from './tracking.js';
 
+// 加载贴图并标记为 sRGB 颜色空间（r155+ 渲染管线要求）
+function makeColorTextureLoader() {
+    const loader = new THREE.TextureLoader();
+    return function loadColorTexture(url) {
+        const t = loader.load(url);
+        t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+    };
+}
+
 export async function loadBodies() {
-    const texLoader = new THREE.TextureLoader();
+    const loadColorTexture = makeColorTextureLoader();
     const currentDate = new Date(STATE.simTime);
     const daysSinceEpoch = daysSinceJ2000(currentDate);
 
@@ -55,9 +65,9 @@ export async function loadBodies() {
         let texture = null;
         if (d.name === 'Earth') {
             // 地球默认中等分辨率，跟踪近距离时再升级到 high（LOD 在 animate.js 处理）
-            texture = texLoader.load('/solar-system/textures/planets/Earth_mid.jpg');
+            texture = loadColorTexture('/solar-system/textures/planets/Earth_mid.jpg');
         } else {
-            texture = texLoader.load('/solar-system/textures/planets/' + d.name + '.jpg?v8k2');
+            texture = loadColorTexture('/solar-system/textures/planets/' + d.name + '.jpg?v8k2');
         }
 
         // 气态行星表面不反光，岩石行星稍反光
@@ -210,17 +220,17 @@ export async function loadBodies() {
         // ---- LOD 纹理（冥王星 / 地球） ----
         if (d.name === 'Pluto') {
             planetObj.lodTextures = {
-                low: texLoader.load('/solar-system/textures/planets/Pluto_low.jpg'),
-                mid: texLoader.load('/solar-system/textures/planets/Pluto_mid.jpg'),
-                high: texLoader.load('/solar-system/textures/planets/Pluto_high.jpg'),
+                low: loadColorTexture('/solar-system/textures/planets/Pluto_low.jpg'),
+                mid: loadColorTexture('/solar-system/textures/planets/Pluto_mid.jpg'),
+                high: loadColorTexture('/solar-system/textures/planets/Pluto_high.jpg'),
             };
             planetObj.currentLOD = 'mid';
         }
         if (d.name === 'Earth') {
             planetObj.lodTextures = {
-                low: texLoader.load('/solar-system/textures/planets/Earth_low.jpg'),
-                mid: texLoader.load('/solar-system/textures/planets/Earth_mid.jpg'),
-                high: texLoader.load('/solar-system/textures/planets/Earth_high.jpg'),
+                low: loadColorTexture('/solar-system/textures/planets/Earth_low.jpg'),
+                mid: loadColorTexture('/solar-system/textures/planets/Earth_mid.jpg'),
+                high: loadColorTexture('/solar-system/textures/planets/Earth_high.jpg'),
             };
             planetObj.currentLOD = 'mid';
         }
@@ -235,7 +245,7 @@ export async function loadBodies() {
         const mMesh = new THREE.Mesh(
             new THREE.SphereGeometry(0.27, 64, 64),
             new THREE.MeshPhongMaterial({
-                map: texLoader.load('/solar-system/textures/planets/8k_moon.jpg?v8k3'),
+                map: loadColorTexture('/solar-system/textures/planets/8k_moon.jpg?v8k3'),
                 shininess: 3,
             })
         );

@@ -27,7 +27,9 @@ export function createSunSurfaceTexture() {
         sunCtx.fillStyle = 'rgba(' + (200 + Math.random() * 55) + ',' + (150 + Math.random() * 55) + ',0,' + (0.1 + Math.random() * 0.2) + ')';
         sunCtx.fill();
     }
-    return new THREE.CanvasTexture(sunCanvas);
+    const tex = new THREE.CanvasTexture(sunCanvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
 }
 
 // 土星环纹理：移动端 2048、桌面 4096
@@ -113,7 +115,9 @@ export function createSaturnRingTexture() {
         ctx.fill();
     }
 
-    return new THREE.CanvasTexture(canvas);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
 }
 
 // 天王星环纹理（窄环、淡蓝）
@@ -130,7 +134,9 @@ export function createUranusRingTexture() {
     gradient.addColorStop(1, 'rgba(120,160,180,0.1)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 1024, 128);
-    return new THREE.CanvasTexture(canvas);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
 }
 
 // 大气层光晕：在球体外侧加一层 BackSide + Additive 混合的着色器壳

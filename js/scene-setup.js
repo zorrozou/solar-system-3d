@@ -46,8 +46,12 @@ export function initScene() {
     });
 
     // ---- 光照 ----
-    STATE.scene.add(new THREE.AmbientLight(0x222233, 0.5));
-    const sunLight = new THREE.PointLight(0xfff5e6, 1.8, 5000);
+    // 在 r170 物理光照模型下，r128 的视觉强度需要根据 decay 模式调试：
+    // - PointLight 设 decay = 0（不衰减）→ 等价 r128 大尺度场景下的"远近一致"行为
+    // - 下面两个系数（2.5 / 1.25）是肉眼对比 r128 调出来的视觉等价值，不是物理推导值
+    STATE.scene.add(new THREE.AmbientLight(0x222233, 0.5 * 2.5 * Math.PI));      // ≈ 3.93
+    const sunLight = new THREE.PointLight(0xfff5e6, 1.8 * 1.25 * Math.PI, 5000); // ≈ 7.07
+    sunLight.decay = 0;
     sunLight.position.set(0, 0, 0);
     sunLight.castShadow = false;
     STATE.scene.add(sunLight);
@@ -111,8 +115,10 @@ export function initScene() {
     gr.addColorStop(1, 'rgba(255,60,0,0)');
     gx.fillStyle = gr;
     gx.fillRect(0, 0, 256, 256);
+    const glowTex = new THREE.CanvasTexture(gc);
+    glowTex.colorSpace = THREE.SRGBColorSpace;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: new THREE.CanvasTexture(gc),
+        map: glowTex,
         transparent: true,
         opacity: 0.85,
     }));
