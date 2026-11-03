@@ -42,6 +42,11 @@ with sync_playwright() as playwright:
         el.tap() if args.mobile else el.click()
 
     click('#pause-btn')
+    assert page.evaluate("""() => {
+        const boxes = [...document.querySelectorAll('.planet-label:not([hidden])')].map(e=>e.getBoundingClientRect());
+        return boxes.length > 0 && boxes.every((a,i) => boxes.slice(i+1).every(b =>
+            a.right<=b.left || a.left>=b.right || a.bottom<=b.top || a.top>=b.bottom));
+    }""")
     before = page.locator('#sim-time').inner_text()
     click('#adjust-btn')
     click('#apply-time')
