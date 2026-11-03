@@ -2,8 +2,8 @@
 // 调用 initUI() 后所有 DOM 上的交互都生效
 
 import { STATE, SPEED_LEVELS, SPEED_LABELS } from './state.js';
-import { updatePlanetsPosition, updateTimeDisplay } from './time.js';
-import { localFields, parseLocal } from './calendar.js';
+import { updateSimulation, updateTimeDisplay } from './time.js';
+import { localFields, localInstants, parseLocal } from './calendar.js';
 import { stopTrack, selectBody } from './tracking.js';
 
 // Bind controls once after the renderer exists.
@@ -46,6 +46,30 @@ export function initUI() {
     const timeAdjust = document.getElementById('time-adjust');
     const applyBtn = document.getElementById('apply-time');
 
+    const fold = document.getElementById('time-fold');
+    const offsetSelect = document.getElementById('time-offset');
+    const inputFields = () => ids.map((id) => document.getElementById(id + '-input').value);
+    let preferredOffset;
+    function refreshOffsets() {
+        const times = localInstants(inputFields());
+        fold.hidden = times.length < 2;
+        if (fold.hidden) return;
+        offsetSelect.replaceChildren();
+        for (const ms of times) {
+            const date = new Date(ms);
+            const zone = new Intl.DateTimeFormat('zh-CN', { timeZoneName: 'longOffset' })
+                .formatToParts(date)
+                .find((part) => part.type === 'timeZoneName').value;
+            offsetSelect.add(new Option(zone, String(date.getTimezoneOffset())));
+        }
+        const selected = parseLocal(inputFields(), preferredOffset);
+        offsetSelect.value = String(new Date(selected).getTimezoneOffset());
+    }
+    for (const id of ids) document.getElementById(id + '-input').addEventListener('input', refreshOffsets);
+    offsetSelect.addEventListener('change', () => {
+        preferredOffset = Number(offsetSelect.value);
+    });
+
     if (adjustBtn && timeAdjust) {
         adjustBtn.addEventListener('click', function () {
             timeAdjust.classList.toggle('show');
@@ -53,6 +77,8 @@ export function initUI() {
                 localFields(STATE.simTime).forEach(
                     (n, i) => (document.getElementById(ids[i] + '-input').value = n)
                 );
+                preferredOffset = new Date(STATE.simTime).getTimezoneOffset();
+                refreshOffsets();
                 document.getElementById('time-error').textContent = '';
             }
         });
@@ -60,7 +86,7 @@ export function initUI() {
 
     if (applyBtn) {
         applyBtn.addEventListener('click', function () {
-            const value = parseLocal(ids.map((id) => document.getElementById(id + '-input').value));
+            const value = parseLocal(inputFields(), preferredOffset);
             if (value === null) {
                 document.getElementById('time-error').textContent =
                     '请输入 2000–2100 年间有效的本地日期和时间。';
@@ -68,7 +94,7 @@ export function initUI() {
             }
             STATE.simTime = value;
             STATE.lastRealTime = performance.now();
-            updatePlanetsPosition(STATE.simTime);
+            updateSimulation(STATE.simTime);
             updateTimeDisplay();
             timeAdjust.classList.remove('show');
         });
@@ -80,7 +106,7 @@ export function initUI() {
         resetBtn.addEventListener('click', function () {
             STATE.simTime = Date.now();
             STATE.lastRealTime = performance.now();
-            updatePlanetsPosition(STATE.simTime);
+            updateSimulation(STATE.simTime);
             updateTimeDisplay();
         });
     }
@@ -114,7 +140,7 @@ export function initUI() {
         if (ev.code === 'KeyR') {
             STATE.simTime = Date.now();
             STATE.lastRealTime = performance.now();
-            updatePlanetsPosition(STATE.simTime);
+            updateSimulation(STATE.simTime);
             updateTimeDisplay();
         }
         if (ev.code === 'Escape') {
@@ -124,38 +150,33 @@ export function initUI() {
     });
 
     // ---- 点击/拖动检测（Pointer Events 统一鼠标和触摸）----
-    let downPos = null;
-    let isDrag = false;
-    const DRAG_THRESHOLD = 5;
-
-    STATE.renderer.domElement.addEventListener('pointerdown', function (ev) {
-        downPos = { x: ev.clientX, y: ev.clientY };
-        isDrag = false;
+    const canvas = STATE.renderer.domElement;
+    const active = new Set();
+    let tap = null;
+    const moved = (ev) => Math.hypot(ev.clientX - tap.x, ev.clientY - tap.y) > 5;
+    canvas.addEventListener('pointerdown', (ev) => {
+        active.add(ev.pointerId);
+        tap =
+            active.size === 1 && ev.isPrimary && ev.button === 0
+                ? { id: ev.pointerId, x: ev.clientX, y: ev.clientY }
+                : null;
     });
-
-    STATE.renderer.domElement.addEventListener('pointermove', function (ev) {
-        if (downPos) {
-            const dx = ev.clientX - downPos.x;
-            const dy = ev.clientY - downPos.y;
-            if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
-                isDrag = true;
-            }
-        }
+    canvas.addEventListener('pointermove', (ev) => {
+        if (tap?.id === ev.pointerId && moved(ev)) tap = null;
     });
-
-    STATE.renderer.domElement.addEventListener('pointerup', function () {
-        if (downPos && !isDrag && STATE.trackTarget) {
-            stopTrack();
-        }
-        downPos = null;
-        isDrag = false;
+    canvas.addEventListener('pointerup', (ev) => {
+        if (tap?.id === ev.pointerId && !moved(ev) && STATE.trackTarget) stopTrack();
+        active.delete(ev.pointerId);
+        tap = null;
     });
+    function cancel(ev) {
+        active.delete(ev.pointerId);
+        tap = null;
+    }
+    canvas.addEventListener('pointercancel', cancel);
+    canvas.addEventListener('lostpointercapture', cancel);
 
     // ---- resize 防抖 ----
-    STATE.renderer.domElement.addEventListener('pointercancel', () => {
-        downPos = null;
-        isDrag = false;
-    });
     let resizeTimer = null;
     window.addEventListener('resize', function () {
         if (resizeTimer) clearTimeout(resizeTimer);

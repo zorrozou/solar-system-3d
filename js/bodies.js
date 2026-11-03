@@ -1,8 +1,12 @@
 import * as THREE from 'three';
 import { STATE } from './state.js';
-import { createSaturnRingTexture, createUranusRingTexture, addAtmosphere } from './factories.js';
-import { updatePlanetsPosition } from './time.js';
-import { orbitPoints } from './orbits.js';
+import {
+    createSaturnRingTexture,
+    createUranusRingTexture,
+    addAtmosphere,
+    seededRandom,
+} from './factories.js';
+import { updateSimulation } from './time.js';
 import { makeSurface, sceneReady } from './textures.js';
 import { registerTarget } from './tracking.js';
 
@@ -102,7 +106,7 @@ export function createBodies(data) {
 
         STATE.scene.add(pivot);
         const line = new THREE.LineLoop(
-            new THREE.BufferGeometry().setFromPoints(orbitPoints(d.name, STATE.simTime)),
+            new THREE.BufferGeometry(),
             new THREE.LineBasicMaterial({ color: 0x334455, transparent: true, opacity: 0.5 })
         );
         STATE.scene.add(line);
@@ -129,20 +133,20 @@ export function createBodies(data) {
     };
     const label = registerTarget(pivot, radius, dataMoon);
     STATE.moon = { pivot, mesh, label, surface: makeSurface(mesh, 'Moon') };
-    updatePlanetsPosition(STATE.simTime);
     // ---- 小行星带（4000 颗） ----
     const aPos = [];
     const aColors = [];
+    const random = seededRandom(2026);
     const aCount = 4000;
     for (let i = 0; i < aCount; i++) {
-        const ar = (2.2 + Math.random() * 1.1) * 30 + 10;
-        const at = Math.random() * Math.PI * 2;
-        aPos.push(Math.cos(at) * ar, (Math.random() - 0.5) * 3, -Math.sin(at) * ar);
+        const ar = (2.2 + random() * 1.1) * 30 + 10;
+        const at = random() * Math.PI * 2;
+        aPos.push(Math.cos(at) * ar, (random() - 0.5) * 3, -Math.sin(at) * ar);
         STATE.asteroidAngles.push(at);
         const auDist = (ar - 10) / 30;
         STATE.asteroidPeriods.push(Math.pow(auDist, 1.5) * 365.25);
         // 颜色：碳质暗黑 / 硅质偏褐 / 金属偏亮
-        const aColorRand = Math.random();
+        const aColorRand = random();
         if (aColorRand < 0.5) {
             aColors.push(0.35, 0.33, 0.3);
         } else if (aColorRand < 0.8) {
@@ -161,5 +165,6 @@ export function createBodies(data) {
     );
     STATE.scene.add(STATE.asteroidBelt);
 
+    updateSimulation(STATE.simTime);
     sceneReady();
 }

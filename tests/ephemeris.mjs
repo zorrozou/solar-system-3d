@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { localFields, parseLocal } from '../js/calendar.js';
+import { localFields, localInstants, parseLocal } from '../js/calendar.js';
 import { astronomyTime, moonOffset, planetPosition, solarTerm } from '../js/ephemeris.js';
 
 for (const zone of ['Asia/Shanghai', 'UTC', 'America/New_York']) {
@@ -19,6 +19,12 @@ for (const zone of ['Asia/Shanghai', 'UTC', 'America/New_York']) {
     }
 }
 assert.equal(parseLocal([2026, 3, 8, 2, 30, 0]), null); // skipped hour in New York
+
+// Lord Howe repeats 30 minutes, rather than a full hour.
+process.env.TZ = 'Australia/Lord_Howe';
+const folded = [2026, 4, 5, 1, 45, 0];
+assert.deepEqual(localInstants(folded), [Date.parse('2026-04-04T14:45Z'), Date.parse('2026-04-04T15:15Z')]);
+assert.equal(parseLocal(folded, -630), Date.parse('2026-04-04T15:15Z'));
 
 const references = JSON.parse(readFileSync(new URL('./j2000-longitude.json', import.meta.url)));
 const epoch = astronomyTime(Date.parse('2000-01-01T12:00:00Z'));

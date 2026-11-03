@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from '../lib/OrbitControls.module.js';
 import { registerTarget } from './tracking.js';
 import { STATE } from './state.js';
-import { createSunSurfaceTexture } from './factories.js';
+import { createSunSurfaceTexture, seededRandom } from './factories.js';
 
 export function initScene() {
     if (typeof THREE === 'undefined') {
@@ -127,15 +127,17 @@ export function initScene() {
     const coronaCount = 200;
     const coronaGeo = new THREE.BufferGeometry();
     const coronaPos = [];
-    const coronaVel = [];
+    const rates = [], offsets = [];
+    const random = seededRandom(42);
     for (let ci = 0; ci < coronaCount; ci++) {
-        const ct = Math.random() * Math.PI * 2;
-        const cp = Math.acos(2 * Math.random() - 1);
-        const cr = 5 + Math.random() * 2;
-        coronaPos.push(cr * Math.sin(cp) * Math.cos(ct), cr * Math.sin(cp) * Math.sin(ct), cr * Math.cos(cp));
-        coronaVel.push(0.02 + Math.random() * 0.05);
+        const ct = random() * Math.PI * 2;
+        const cp = Math.acos(2 * random() - 1);
+        coronaPos.push(Math.sin(cp)*Math.cos(ct), Math.sin(cp)*Math.sin(ct), Math.cos(cp));
+        rates.push(1.2 + random()*3);
+        offsets.push(random()*6.8);
     }
     coronaGeo.setAttribute('position', new THREE.Float32BufferAttribute(coronaPos, 3));
+    coronaGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 12);
     const coronaMat = new THREE.PointsMaterial({
         color: 0xffcc44,
         size: 0.3,
@@ -145,7 +147,7 @@ export function initScene() {
     });
     const coronaMesh = new THREE.Points(coronaGeo, coronaMat);
     STATE.sunMesh.add(coronaMesh);
-    STATE.corona = { mesh: coronaMesh, vels: coronaVel, count: coronaCount };
+    STATE.corona = { mesh: coronaMesh, rates, offsets, directions: coronaPos };
 
     return true;
 }

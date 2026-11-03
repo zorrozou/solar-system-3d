@@ -3,8 +3,17 @@
 
 import * as THREE from 'three';
 
+// Fixed seeds reproduce the same illustrative features after a reload.
+export function seededRandom(seed) {
+    return () => {
+        seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+        return seed / 4294967296;
+    };
+}
+
 // 太阳表面纹理（带黑子细节）
 export function createSunSurfaceTexture() {
+    const random = seededRandom(7);
     const sunCanvas = document.createElement('canvas');
     sunCanvas.width = 1024;
     sunCanvas.height = 512;
@@ -19,12 +28,12 @@ export function createSunSurfaceTexture() {
     sunCtx.fillRect(0, 0, 1024, 512);
     // 太阳黑子和纹理细节
     for (let si = 0; si < 200; si++) {
-        const sx = Math.random() * 1024;
-        const sy = Math.random() * 512;
-        const sr = 2 + Math.random() * 8;
+        const sx = random() * 1024;
+        const sy = random() * 512;
+        const sr = 2 + random() * 8;
         sunCtx.beginPath();
         sunCtx.arc(sx, sy, sr, 0, Math.PI * 2);
-        sunCtx.fillStyle = 'rgba(' + (200 + Math.random() * 55) + ',' + (150 + Math.random() * 55) + ',0,' + (0.1 + Math.random() * 0.2) + ')';
+        sunCtx.fillStyle = 'rgba(' + (200 + random() * 55) + ',' + (150 + random() * 55) + ',0,' + (0.1 + random() * 0.2) + ')';
         sunCtx.fill();
     }
     const tex = new THREE.CanvasTexture(sunCanvas);

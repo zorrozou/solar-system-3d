@@ -126,7 +126,7 @@
             <select id="body-picker" class="toolbar-btn" aria-label="选择天体"><option value="">选择天体</option></select>
             <button class="toolbar-btn" id="overview">返回全景</button>
         </div>
-        <span id="texture-status" role="status"></span>
+        <div><span id="texture-status" role="status"></span> <button id="retry-textures" class="toolbar-btn" hidden>重试纹理</button></div>
     </div>
 
     <div id="time-adjust">
@@ -140,6 +140,7 @@
             <label for="minute-input">分</label><input type="number" id="minute-input" min="0" max="59">
             <label for="second-input">秒</label><input type="number" id="second-input" min="0" max="59">
         </div>
+        <label id="time-fold" hidden>这个时间出现两次，选择时区偏移 <select id="time-offset"></select></label>
         <span id="time-error" role="alert"></span>
         <button id="apply-time">应用时间</button>
     </div>
@@ -170,21 +171,28 @@
 {
     "imports": {
         "three": "/solar-system/lib/three.module.js",
-        "/solar-system/js/animate.js": "/solar-system/js/animate.js?v=8.0.1",
-        "/solar-system/js/bodies.js": "/solar-system/js/bodies.js?v=8.0.0",
-        "/solar-system/js/calendar.js": "/solar-system/js/calendar.js?v=8.0.0",
-        "/solar-system/js/ephemeris.js": "/solar-system/js/ephemeris.js?v=8.0.0",
-        "/solar-system/js/factories.js": "/solar-system/js/factories.js?v=8.0.0",
-        "/solar-system/js/orbits.js": "/solar-system/js/orbits.js?v=8.0.0",
-        "/solar-system/js/scene-setup.js": "/solar-system/js/scene-setup.js?v=8.0.0",
-        "/solar-system/js/state.js": "/solar-system/js/state.js?v=8.0.0",
-        "/solar-system/js/textures.js": "/solar-system/js/textures.js?v=8.0.0",
-        "/solar-system/js/time.js": "/solar-system/js/time.js?v=8.0.0",
-        "/solar-system/js/tracking.js": "/solar-system/js/tracking.js?v=8.0.0",
-        "/solar-system/js/ui.js": "/solar-system/js/ui.js?v=8.0.0"
+        "/solar-system/js/animate.js": "/solar-system/js/animate.js?v=8.1.0",
+        "/solar-system/js/bodies.js": "/solar-system/js/bodies.js?v=8.1.0",
+        "/solar-system/js/calendar.js": "/solar-system/js/calendar.js?v=8.1.0",
+        "/solar-system/js/ephemeris.js": "/solar-system/js/ephemeris.js?v=8.1.0",
+        "/solar-system/js/factories.js": "/solar-system/js/factories.js?v=8.1.0",
+        "/solar-system/js/orbits.js": "/solar-system/js/orbits.js?v=8.1.0",
+        "/solar-system/js/scene-setup.js": "/solar-system/js/scene-setup.js?v=8.1.0",
+        "/solar-system/js/state.js": "/solar-system/js/state.js?v=8.1.0",
+        "/solar-system/js/textures.js": "/solar-system/js/textures.js?v=8.1.0",
+        "/solar-system/js/time.js": "/solar-system/js/time.js?v=8.1.0",
+        "/solar-system/js/tracking.js": "/solar-system/js/tracking.js?v=8.1.0",
+        "/solar-system/js/ui.js": "/solar-system/js/ui.js?v=8.1.0"
     }
 }
     </script>
-    <script type="module" src="/solar-system/js/main.js?v=8.0.0"></script>
+    <script type="module">
+        import('/solar-system/js/main.js?v=8.1.0').catch(() => {
+            document.getElementById('loading-message').textContent = '演示程序未能加载。请检查网络后重试。';
+            const retry = document.getElementById('retry-load');
+            retry.onclick = () => location.reload();
+            retry.hidden = false;
+        });
+    </script>
 </body>
 </html>

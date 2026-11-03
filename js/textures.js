@@ -1,45 +1,86 @@
 import * as THREE from 'three';
 
 const loader = new THREE.TextureLoader();
-let previews = 0;
-let details = 0;
-let previewFailed = false;
-let detailFailed = false;
+const surfaces = [];
 let ready = false;
 function status() {
     if (!ready) return;
-    const el = document.getElementById('texture-status');
-    if (previews) el.textContent = '场景可操作 · 正在加载预览';
-    else if (details) el.textContent = '场景可操作 · 正在加载高清纹理';
-    else if (detailFailed) el.textContent = '高清纹理暂不可用 · 已保留预览';
-    else if (previewFailed) el.textContent = '部分纹理未载入 · 可继续浏览';
-    else el.textContent = '场景就绪';
+    const previewsPending = surfaces.some((s) => s.previewPending);
+    const detailsPending = surfaces.some((s) => s.pending && s.near);
+    const missingMap = surfaces.some((s) => s.previewFailed && !s.mesh.material.map);
+    const detailFailed = surfaces.some((s) => s.near && s.retryAfter > 0);
+    const statusLine = document.getElementById('texture-status');
+    if (previewsPending) statusLine.textContent = '场景可操作 · 正在加载预览';
+    else if (detailsPending) statusLine.textContent = '场景可操作 · 正在加载高清纹理';
+    else if (missingMap) statusLine.textContent = '部分天体没有载入贴图 · 已使用基础颜色';
+    else if (detailFailed) statusLine.textContent = '高清纹理暂不可用 · 已保留预览';
+    else statusLine.textContent = '场景就绪';
+    document.getElementById('retry-textures').hidden =
+        !surfaces.some((s) => s.previewFailed) && !detailFailed;
 }
 export function sceneReady() {
     ready = true;
+    document.getElementById('retry-textures').onclick = () => {
+        for (const s of surfaces) {
+            if (s.previewFailed && !s.previewPending) loadPreview(s);
+            if (s.near && s.retryAfter > 0) {
+                s.retryAfter = 0;
+                detailLevel(s, true);
+            }
+        }
+    };
     status();
 }
 
 export function makeSurface(mesh, name) {
-    const surface = { mesh, name, preview: null, detail: null, pending: false, retryAfter: 0, near: false };
-    previews++;
+    const surface = {
+        mesh,
+        name,
+        preview: null,
+        detail: null,
+        previewPending: false,
+        previewFailed: false,
+        pending: false,
+        retryAfter: 0,
+        near: false,
+    };
+    // The scene has one solar point light. Keep its Phong shading, but use
+    // the body's physical direction to the Sun, independent of display scale.
+    surface.sunDirection = new THREE.Vector3();
+    mesh.material.onBeforeCompile = (shader) => {
+        shader.uniforms.solarDirection = { value: surface.sunDirection };
+        const lighting = THREE.ShaderChunk.lights_fragment_begin.replace(
+            'getPointLightInfo( pointLight, geometryPosition, directLight );',
+            '$&\n directLight.direction = normalize(mat3(viewMatrix) * solarDirection);'
+        );
+        shader.fragmentShader =
+            'uniform vec3 solarDirection;\n' +
+            shader.fragmentShader.replace('#include <lights_fragment_begin>', lighting);
+    };
+    surfaces.push(surface);
+    loadPreview(surface);
+    return surface;
+}
+function loadPreview(s) {
+    s.previewPending = true;
+    s.previewFailed = false;
+    status();
     loader.load(
-        '/solar-system/textures/preview/' + name + '.webp',
+        '/solar-system/textures/preview/' + s.name + '.webp',
         (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
-            surface.preview = tex;
-            if (!surface.near || !surface.detail) setMap(surface, tex);
-            previews--;
+            s.preview = tex;
+            s.previewPending = false;
+            if (!s.near || !s.detail) setMap(s, tex);
             status();
         },
         undefined,
         () => {
-            previews--;
-            previewFailed = true;
+            s.previewPending = false;
+            s.previewFailed = true;
             status();
         }
     );
-    return surface;
 }
 function setMap(surface, tex) {
     const mat = surface.mesh.material;
@@ -48,43 +89,45 @@ function setMap(surface, tex) {
     mat.color.set(0xffffff);
     mat.needsUpdate = true;
 }
-export function detailLevel(surface, near) {
-    surface.near = near;
+export function detailLevel(s, near) {
+    const changed = s.near !== near;
+    s.near = near;
     if (!near) {
-        if (surface.preview) setMap(surface, surface.preview);
-        if (surface.detail && surface.preview) {
-            surface.detail.dispose();
-            surface.detail = null;
+        if (s.preview) setMap(s, s.preview);
+        if (s.detail && s.preview) {
+            s.detail.dispose();
+            s.detail = null;
         }
+        if (changed) status();
         return;
     }
-    if (surface.detail) {
-        setMap(surface, surface.detail);
+    if (s.detail) {
+        setMap(s, s.detail);
+        if (changed) status();
         return;
     }
-    if (surface.pending || performance.now() < surface.retryAfter) return;
-    surface.pending = true;
-    details++;
-    detailFailed = false;
+    if (s.pending || performance.now() < s.retryAfter) {
+        if (changed) status();
+        return;
+    }
+    s.pending = true;
+    s.retryAfter = 0;
     status();
     loader.load(
-        '/solar-system/textures/detail/' + surface.name + '.webp',
+        '/solar-system/textures/detail/' + s.name + '.webp',
         (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
-            surface.pending = false;
-            details--;
-            if (surface.near) {
-                surface.detail = tex;
-                setMap(surface, tex);
+            s.pending = false;
+            if (s.near || !s.preview) {
+                s.detail = tex;
+                setMap(s, tex);
             } else tex.dispose();
             status();
         },
         undefined,
         () => {
-            surface.pending = false;
-            details--;
-            detailFailed = true;
-            surface.retryAfter = performance.now() + 30000;
+            s.pending = false;
+            s.retryAfter = performance.now() + 30000;
             status();
         }
     );

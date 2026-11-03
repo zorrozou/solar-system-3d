@@ -14,7 +14,6 @@ export const STATE = {
     // 太阳
     sunMesh: null,
     sunLabel: null,
-    sunPulse: 0,
     corona: null,            // { mesh, vels, count } —— 替代原 window._corona
 
     // 行星 / 月球 / 小行星
@@ -26,7 +25,6 @@ export const STATE = {
     asteroidAngles: [],
     asteroidPeriods: [],
     asteroidDists: [],
-    asteroidFrame: 0,        // 替代原 window._asteroidFrame
 
     // 时间
     simTime: Date.now(),
