@@ -158,7 +158,7 @@ HTTP/2 200
 ```
 
 意味着**任何爬虫**都能用 `git-dumper` 把整个仓库（含全部 commit 历史）拖回本地，包括：
-- 数据库密码 `solar_pass_2026`（明文写在 `api/planets.php` 兜底字符串）
+- 数据库密码 `[已撤销]`（明文写在 `api/planets.php` 兜底字符串）
 - GitHub Personal Access Token（明文写在 `.git/config` 的 remote URL）
 
 附带损害：`/earth-sun-seasons/.git/HEAD` 也是 200。
@@ -392,7 +392,7 @@ STATE.planets.forEach(function (p) {
 |---|---|---|
 | ~~P0-#1~~ | ~~`.git/` 目录公网可读~~ | ✅ 已修复（阶段 B） |
 | **P0-#2** | `db-backup/solar_system.sql` 公网可读 | nginx 加 `location ~ /db-backup/` deny 或挪出 webroot |
-| **P0-#3** | DB 密码硬编码 `solar_pass_2026` 在 PHP | 改强密码 + 写到 `/etc/environment` 或 fastcgi_param + 删 PHP 兜底字符串 |
+| **P0-#3** | DB 密码硬编码 `[已撤销]` 在 PHP | 改强密码 + 写到 `/etc/environment` 或 fastcgi_param + 删 PHP 兜底字符串 |
 
 > 用户已表态"#3 数据库密码数据不敏感"，但 .git 已经修了，所以暴露面收窄。`#2` 暴露的是同一份 SQL，影响相同。
 

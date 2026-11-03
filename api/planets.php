@@ -1,16 +1,14 @@
 <?php
-$dbHost = getenv('DB_HOST') ?: 'localhost';
-$dbUser = getenv('DB_USER') ?: 'solar_user';
-$dbPass = getenv('DB_PASS') ?: 'solar_pass_2026';
-$dbName = getenv('DB_NAME') ?: 'solar_system';
-
-header('Content-Type: application/json');
+// Configuration is provisioned outside the web root, readable only by PHP.
+header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
-header('Cache-Control: public, max-age=3600');
 
 try {
-    $conn = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
-    if ($conn->connect_error) throw new Exception('数据库连接失败');
+    $config = @parse_ini_file('/etc/solar-system/database.ini', false, INI_SCANNER_RAW);
+    if (!$config || empty($config['user']) || empty($config['password'])) {
+        throw new RuntimeException('Missing database configuration');
+    }
+    $conn = new mysqli('localhost', $config['user'], $config['password'], 'solar_system');
     $conn->set_charset('utf8mb4');
 
     $result = $conn->query("SELECT * FROM planets ORDER BY distance_from_sun");
@@ -37,10 +35,12 @@ try {
             'perihelion_longitude' => (float)($row['perihelion_longitude'] ?? 0),
         ];
     }
+    header('Cache-Control: public, max-age=3600');
     echo json_encode($planets, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+} catch (Throwable $e) {
+    header('Cache-Control: no-store');
+    http_response_code(503);
+    echo json_encode(['error' => '天体数据暂时不可用，请重试。'], JSON_UNESCAPED_UNICODE);
 } finally {
     if (isset($conn)) $conn->close();
 }

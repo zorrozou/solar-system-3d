@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>3D 太阳系 - Zorro's Space</title>
@@ -10,8 +10,8 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; }
-        body { font-family: -apple-system, 'Noto Sans SC', sans-serif; background: #000; color: #fff; touch-action: none; }
-        #canvas-container { width: 100vw; height: 100vh; cursor: grab; }
+        body { font-family: -apple-system, 'Noto Sans SC', sans-serif; background: #000; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; cursor: grab; touch-action: none; }
         #canvas-container:active { cursor: grabbing; }
         
         /* 左上角工具栏 */
@@ -36,7 +36,7 @@
         #apply-time { padding: 6px 16px; background: #60a5fa; border: none; border-radius: 6px; color: #fff; font-size: 12px; cursor: pointer; margin-top: 4px; }
         #apply-time:hover { background: #3b82f6; }
         
-        #info-panel { position: fixed; top: 12px; right: 12px; background: rgba(8,10,20,0.92); padding: 18px; border-radius: 14px; width: 280px; max-width: calc(100vw - 24px); max-height: calc(100vh - 80px); overflow-y: auto; display: none; z-index: 10; }
+        #info-panel { position: fixed; top: 12px; right: 12px; background: rgba(8,10,20,0.92); padding: 18px; border-radius: 14px; width: 280px; max-width: calc(100vw - 24px); max-height: calc(100vh - 80px); overflow-y: auto; z-index: 21; }
         #planet-name { font-size: 18px; font-weight: 600; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
         .stat { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 12px; }
         .stat-label { color: rgba(255,255,255,0.5); }
@@ -86,6 +86,24 @@
             #speed-slider { width: 100px; }
             #controls { padding: 8px 12px; gap: 8px; }
         }
+        [hidden] { display: none !important; }
+        .planet-label { position:absolute; transform:translate(-50%,-100%); border:0; border-radius:5px; background:transparent; padding:3px 6px; color:#cbd5e1; white-space:nowrap; cursor:pointer; }
+        .planet-label:hover,.planet-label:focus-visible { color:white; background:#263547; }
+        #body-picker { max-width:112px; color:#dceaff; background:#151c29; }
+        #texture-status,#zone,.data-source { color:#9baabf; font-size:11px; }
+        .data-source { display:block; margin-top:9px; }
+        .data-source a { color:#9cc9ff; }
+        #time-error { color:#ffa9a9; font-size:12px; max-width:240px; }
+        #time-adjust { top:118px; z-index:25; }
+        .loading { text-align:center; background:#141d2c; border-radius:12px; padding:12px; color:#dee9fb; }
+        .loading button { display:block; margin:8px auto 0; }
+        #pause-btn { white-space:nowrap; }
+        @media (max-width:600px) {
+            #controls { max-width:calc(100vw - 12px); }
+            #speed-label { min-width:auto; }
+            #speed-slider { width:clamp(48px,24vw,120px); }
+            #time-adjust { top:100px; }
+        }
     </style>
 </head>
 <body>
@@ -99,35 +117,43 @@
             <div id="sim-time">--:--:--</div>
             <div id="sim-date">加载中...</div>
             <div id="season-info" style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:3px;"></div>
+            <span id="zone"></span>
         </div>
+        <div class="toolbar-row">
+            <select id="body-picker" class="toolbar-btn" aria-label="选择天体"><option value="">选择天体</option></select>
+            <button class="toolbar-btn" id="overview">返回全景</button>
+        </div>
+        <span id="texture-status" role="status"></span>
     </div>
 
     <div id="time-adjust">
         <div class="time-row">
-            <label>年</label><input type="number" id="year-input" min="2000" max="2100">
-            <label>月</label><input type="number" id="month-input" min="1" max="12">
-            <label>日</label><input type="number" id="day-input" min="1" max="31">
+            <label for="year-input">年</label><input type="number" id="year-input" min="2000" max="2100">
+            <label for="month-input">月</label><input type="number" id="month-input" min="1" max="12">
+            <label for="day-input">日</label><input type="number" id="day-input" min="1" max="31">
         </div>
         <div class="time-row">
-            <label>时</label><input type="number" id="hour-input" min="0" max="23">
-            <label>分</label><input type="number" id="minute-input" min="0" max="59">
-            <label>秒</label><input type="number" id="second-input" min="0" max="59">
+            <label for="hour-input">时</label><input type="number" id="hour-input" min="0" max="23">
+            <label for="minute-input">分</label><input type="number" id="minute-input" min="0" max="59">
+            <label for="second-input">秒</label><input type="number" id="second-input" min="0" max="59">
         </div>
+        <span id="time-error" role="alert"></span>
         <button id="apply-time">应用时间</button>
     </div>
 
     <div id="canvas-container"></div>
-    <div class="loading" id="loading">加载中...</div>
+    <div class="loading" id="loading" role="status"><span id="loading-message">正在初始化场景…</span><button class="toolbar-btn" id="retry-load" hidden>重试</button></div>
 
-    <div id="info-panel">
+    <div id="info-panel" hidden>
         <h2 id="planet-name"></h2>
         <div id="planet-info"></div>
+        <small class="data-source">位置与月相 · Astronomy Engine 2.1.19<br>物理资料与卫星数 · <a href="https://ssd.jpl.nasa.gov/planets/phys_par.html" target="_blank" rel="noopener">JPL 物理参数</a> / <a href="https://ssd.jpl.nasa.gov/sats/discovery.html" target="_blank" rel="noopener">卫星名录</a><br>资料核对日期 2026-11-03</small>
     </div>
 
-    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放 · 空格暂停 · 行星大小为非线性缩放</div>
+    <div class="hint">点击行星名查看详情 · 拖动旋转 · 双指缩放 · 空格暂停 · 天体大小与距离采用示意比例</div>
 
     <div id="controls">
-        <span id="speed-label">速率</span>
+        <label id="speed-label" for="speed-slider">速率</label>
         <input type="range" id="speed-slider" min="0" max="9" step="1" value="0">
         <span id="speed-value">1秒=1秒</span>
         <button id="pause-btn">⏸ 暂停</button>
@@ -138,12 +164,24 @@
     </div>
 
     <script type="importmap">
-    {
-        "imports": {
-            "three": "/solar-system/lib/three.module.js"
-        }
+{
+    "imports": {
+        "three": "/solar-system/lib/three.module.js",
+        "/solar-system/js/animate.js": "/solar-system/js/animate.js?v=8.0.0",
+        "/solar-system/js/bodies.js": "/solar-system/js/bodies.js?v=8.0.0",
+        "/solar-system/js/calendar.js": "/solar-system/js/calendar.js?v=8.0.0",
+        "/solar-system/js/ephemeris.js": "/solar-system/js/ephemeris.js?v=8.0.0",
+        "/solar-system/js/factories.js": "/solar-system/js/factories.js?v=8.0.0",
+        "/solar-system/js/orbits.js": "/solar-system/js/orbits.js?v=8.0.0",
+        "/solar-system/js/scene-setup.js": "/solar-system/js/scene-setup.js?v=8.0.0",
+        "/solar-system/js/state.js": "/solar-system/js/state.js?v=8.0.0",
+        "/solar-system/js/textures.js": "/solar-system/js/textures.js?v=8.0.0",
+        "/solar-system/js/time.js": "/solar-system/js/time.js?v=8.0.0",
+        "/solar-system/js/tracking.js": "/solar-system/js/tracking.js?v=8.0.0",
+        "/solar-system/js/ui.js": "/solar-system/js/ui.js?v=8.0.0"
     }
+}
     </script>
-    <script type="module" src="/solar-system/js/main.js?v=7.0.0"></script>
+    <script type="module" src="/solar-system/js/main.js?v=8.0.0"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from '../lib/OrbitControls.module.js';
+import { registerTarget } from './tracking.js';
 import { STATE } from './state.js';
 import { createSunSurfaceTexture } from './factories.js';
 
@@ -32,7 +33,7 @@ export function initScene() {
     STATE.controls.dampingFactor = 0.08;
     STATE.controls.rotateSpeed = 0.8;
     STATE.controls.minDistance = 5;
-    STATE.controls.maxDistance = 2000;
+    STATE.controls.maxDistance = 15000;
 
     STATE.controls.addEventListener('start', function () {
         STATE.isDragging = true;
@@ -92,16 +93,13 @@ export function initScene() {
         name: 'Sun',
         name_cn: '太阳',
         description: '太阳是太阳系的中心天体，占太阳系总质量的99.86%',
+        radius: 695700,
         rotation_period: 25.4,
     };
     STATE.scene.add(STATE.sunMesh);
 
     // ---- 太阳标签 ----
-    STATE.sunLabel = document.createElement('div');
-    STATE.sunLabel.textContent = '太阳';
-    STATE.sunLabel.className = 'planet-label';
-    STATE.sunLabel.style.cssText = 'position:absolute;color:rgba(255,200,100,0.8);font-size:13px;cursor:pointer;text-align:center;white-space:nowrap;padding:2px 6px;border-radius:3px;transform:translate(-50%,-100%);';
-    document.getElementById('canvas-container').appendChild(STATE.sunLabel);
+    STATE.sunLabel = registerTarget(STATE.sunMesh, 5, STATE.sunMesh.userData);
 
     // ---- 太阳光晕（Sprite） ----
     const gc = document.createElement('canvas');

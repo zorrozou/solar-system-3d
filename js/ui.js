@@ -3,17 +3,15 @@
 
 import { STATE, SPEED_LEVELS, SPEED_LABELS } from './state.js';
 import { updatePlanetsPosition, updateTimeDisplay } from './time.js';
-import { stopTrack, showInfo } from './tracking.js';
+import { localFields, parseLocal } from './calendar.js';
+import { stopTrack, selectBody } from './tracking.js';
 
-// 太阳点击：在 sunMesh 创建好之后绑定（initUI 里处理）
+// Bind controls once after the renderer exists.
 export function initUI() {
-    // ---- 太阳标签点击 → 显示太阳信息 ----
-    if (STATE.sunLabel && STATE.sunMesh) {
-        STATE.sunLabel.addEventListener('click', function (ev) {
-            ev.stopPropagation();
-            showInfo(STATE.sunMesh.userData);
-        });
-    }
+    const ids = ['year', 'month', 'day', 'hour', 'minute', 'second'];
+    document.getElementById('body-picker').addEventListener('change', (ev) => selectBody(ev.target.value));
+    document.getElementById('overview').addEventListener('click', stopTrack);
+    document.getElementById('zone').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     // ---- 速率滑块 ----
     const speedSlider = document.getElementById('speed-slider');
@@ -39,7 +37,7 @@ export function initUI() {
         pb.addEventListener('click', function () {
             STATE.paused = !STATE.paused;
             pb.textContent = STATE.paused ? '▶ 继续' : '⏸ 暂停';
-            STATE.lastRealTime = Date.now();
+            STATE.lastRealTime = performance.now();
         });
     }
 
@@ -52,28 +50,24 @@ export function initUI() {
         adjustBtn.addEventListener('click', function () {
             timeAdjust.classList.toggle('show');
             if (timeAdjust.classList.contains('show')) {
-                const d = new Date(STATE.simTime);
-                document.getElementById('year-input').value = d.getFullYear();
-                document.getElementById('month-input').value = d.getMonth() + 1;
-                document.getElementById('day-input').value = d.getDate();
-                document.getElementById('hour-input').value = d.getHours();
-                document.getElementById('minute-input').value = d.getMinutes();
-                document.getElementById('second-input').value = d.getSeconds();
+                localFields(STATE.simTime).forEach(
+                    (n, i) => (document.getElementById(ids[i] + '-input').value = n)
+                );
+                document.getElementById('time-error').textContent = '';
             }
         });
     }
 
     if (applyBtn) {
         applyBtn.addEventListener('click', function () {
-            const year = parseInt(document.getElementById('year-input').value);
-            const month = parseInt(document.getElementById('month-input').value) - 1;
-            const day = parseInt(document.getElementById('day-input').value);
-            const hour = parseInt(document.getElementById('hour-input').value);
-            const minute = parseInt(document.getElementById('minute-input').value);
-            const second = parseInt(document.getElementById('second-input').value);
-
-            STATE.simTime = Date.UTC(year, month, day, hour, minute, second);
-            STATE.lastRealTime = Date.now();
+            const value = parseLocal(ids.map((id) => document.getElementById(id + '-input').value));
+            if (value === null) {
+                document.getElementById('time-error').textContent =
+                    '请输入 2000–2100 年间有效的本地日期和时间。';
+                return;
+            }
+            STATE.simTime = value;
+            STATE.lastRealTime = performance.now();
             updatePlanetsPosition(STATE.simTime);
             updateTimeDisplay();
             timeAdjust.classList.remove('show');
@@ -85,7 +79,7 @@ export function initUI() {
     if (resetBtn) {
         resetBtn.addEventListener('click', function () {
             STATE.simTime = Date.now();
-            STATE.lastRealTime = Date.now();
+            STATE.lastRealTime = performance.now();
             updatePlanetsPosition(STATE.simTime);
             updateTimeDisplay();
         });
@@ -93,11 +87,19 @@ export function initUI() {
 
     // ---- 键盘 ----
     document.addEventListener('keydown', function (ev) {
+        if (
+            ev.code !== 'Escape' &&
+            (ev.altKey ||
+                ev.ctrlKey ||
+                ev.metaKey ||
+                ev.target.closest?.('input,select,textarea,button,a,[contenteditable="true"]'))
+        )
+            return;
         if (ev.code === 'Space') {
             ev.preventDefault();
             STATE.paused = !STATE.paused;
             if (pb) pb.textContent = STATE.paused ? '▶ 继续' : '⏸ 暂停';
-            STATE.lastRealTime = Date.now();
+            STATE.lastRealTime = performance.now();
         }
         if (ev.code === 'Equal' || ev.code === 'NumpadAdd' || ev.code === 'ArrowRight') {
             STATE.currentSpeedIndex = Math.min(STATE.currentSpeedIndex + 1, SPEED_LEVELS.length - 1);
@@ -111,7 +113,7 @@ export function initUI() {
         }
         if (ev.code === 'KeyR') {
             STATE.simTime = Date.now();
-            STATE.lastRealTime = Date.now();
+            STATE.lastRealTime = performance.now();
             updatePlanetsPosition(STATE.simTime);
             updateTimeDisplay();
         }
@@ -142,7 +144,7 @@ export function initUI() {
     });
 
     STATE.renderer.domElement.addEventListener('pointerup', function () {
-        if (!isDrag && STATE.trackTarget) {
+        if (downPos && !isDrag && STATE.trackTarget) {
             stopTrack();
         }
         downPos = null;
@@ -150,6 +152,10 @@ export function initUI() {
     });
 
     // ---- resize 防抖 ----
+    STATE.renderer.domElement.addEventListener('pointercancel', () => {
+        downPos = null;
+        isDrag = false;
+    });
     let resizeTimer = null;
     window.addEventListener('resize', function () {
         if (resizeTimer) clearTimeout(resizeTimer);

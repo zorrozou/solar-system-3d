@@ -1,0 +1,5 @@
+# Include inside every server block that serves /solar-system/.
+location ^~ /solar-system/db-backup/ { return 404; }
+location ^~ /solar-system/docs/ { return 404; }
+location ^~ /solar-system/tests/ { return 404; }
+location ^~ /solar-system/ops/ { return 404; }

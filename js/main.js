@@ -1,41 +1,40 @@
-// 入口模块：初始化时间显示 → 创建场景 → 加载行星数据 → 绑定 UI → 启动主循环
-
-import { STATE } from './state.js';
-import { updateTimeDisplay } from './time.js';
 import { initScene } from './scene-setup.js';
-import { loadBodies } from './bodies.js';
+import { fetchCatalog, createBodies } from './bodies.js';
 import { initUI } from './ui.js';
 import { animate } from './animate.js';
+import { updateTimeDisplay } from './time.js';
 
-async function main() {
+const loading = document.getElementById('loading');
+const message = document.getElementById('loading-message');
+const retry = document.getElementById('retry-load');
+async function load() {
+    retry.hidden = true;
+    message.textContent = '正在读取天体数据…';
+    let rows;
     try {
-        // 时间显示先刷一遍（在 fetch 完成前用户也能看到当前时间）
-        updateTimeDisplay();
-
-        // 场景与渲染器
-        const ok = initScene();
-        if (!ok) return;
-
-        // UI 事件绑定（依赖 STATE.renderer 和 STATE.sunLabel）
-        initUI();
-
-        // 异步加载行星数据 → 创建天体
-        // loadBodies 不阻塞 animate 启动，行星 mesh 就位后 animate 自然开始驱动它们
-        loadBodies().catch(function (e) {
-            const loading = document.getElementById('loading');
-            if (loading) {
-                loading.textContent = '加载失败: ' + (e && e.message ? e.message : e);
-                loading.classList.add('error');
-            }
-        });
-
-        // 启动主循环
-        animate();
-    } catch (e) {
-        const loading = document.getElementById('loading');
-        if (loading) loading.textContent = '错误: ' + e.message;
+        rows = await fetchCatalog();
+    } catch {
+        message.textContent = '暂时无法读取天体数据。请检查网络后重试。';
+        retry.hidden = false;
+        return;
+    }
+    try {
+        createBodies(rows);
+        loading.hidden = true;
+    } catch {
+        message.textContent = '场景初始化失败。请重新载入页面。';
+        retry.onclick = () => location.reload();
+        retry.hidden = false;
     }
 }
-
-// type=module 默认 defer，DOM 已就绪
-main();
+try {
+    updateTimeDisplay();
+    if (initScene()) {
+        initUI();
+        animate();
+        retry.onclick = load;
+        load();
+    }
+} catch {
+    message.textContent = '无法启动 3D 场景。请启用 WebGL 2 或使用支持硬件加速的浏览器。';
+}
